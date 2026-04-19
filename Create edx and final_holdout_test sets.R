@@ -66,7 +66,115 @@ rm(dl, ratings, movies, test_index, temp, movielens, removed)
 
 
 ##########################################################
-# Part 2: Creating the train_set and test_set
+# Part 2: Preliminary Data Exploration (edx dataset)
+# responses to the quizz
+##########################################################
+# 1. Structure and dimensions of edx
+res_dim <- dim(edx)
+message(paste("The edx dataset has", res_dim[1], "rows and", res_dim[2], "columns."))
+
+# 2. Preview of the data
+head(edx)
+
+# 3. Summary of key statistics
+summary(edx)
+
+# 4. Counting unique users and movies, numbers of zeros and threes
+n_unique_users <- n_distinct(edx$userId)
+n_unique_movies <- n_distinct(edx$movieId)
+
+message(paste("There are", n_unique_users, "unique users and", n_unique_movies, "unique movies in edx."))
+
+# Verification of specific ratings. Using efficient vectorized sums for specific counts
+count_0 <- sum(edx$rating == 0)
+count_3 <- sum(edx$rating == 3)
+# Insight: In the MovieLens 10M dataset, ratings are on a 0.5 to 5.0 scale.
+# A count of 0 for the "0" rating confirms the expected range.
+message(paste("Number of 0 ratings:", count_0))
+message(paste("Number of 3 ratings:", count_3))
+
+# 5. Identifying the most rated genres (simple top 10)
+# NOTE ON COMPUTATIONAL LIMITATIONS:
+# The standard approach using separate_rows() directly on the 9M row 'edx' dataset
+# represents a significant memory overhead. In a Virtual Machine (VM) environment 
+# with limited RAM (my setting), this operation triggers a "memory exhaustion" state, 
+# leading to system instability (Disk Swapping).
+
+
+# [ALGORITHM 0: Standard Tidyverse - COMMENTED OUT DUE TO RAM CONSTRAINTS]
+# top_genres <- edx %>% 
+#   separate_rows(genres, sep = "\\|") %>% 
+#   group_by(genres) %>% 
+#   summarize(count = n()) %>% 
+#   arrange(desc(count))
+# head(top_genres, 10)
+
+# To overcome this, we evaluate three alternative methods to ensure 
+# results consistency while optimizing memory footprint.
+
+# --- Method 1: Data Sampling (Statistical Approximation) ---
+# Useful for quick exploration but introduces a small margin of error.
+top_genres_m1 <- edx %>% 
+  slice_sample(n = 1000000) %>% 
+  separate_rows(genres, sep = "\\|") %>% 
+  group_by(genres) %>% 
+  summarize(count = n()) %>%
+  mutate(method = "Sampling (1M)")
+
+# --- Method 2: stringr::str_count (Efficient counting without duplication) ---
+# Accurate for counts, but less flexible for complex multi-genre analysis.
+genres_list <- c("Drama", "Comedy", "Thriller", "Romance") # Example list
+top_genres_m2 <- data.frame(
+  genres = genres_list,
+  count = sapply(genres_list, function(g) sum(str_detect(edx$genres, g))),
+  method = "String Detect"
+)
+
+# --- Method 3: Pre-aggregation (Optimal Engineering approach) ---
+# This method reduces the 9M rows to ~800 unique combinations BEFORE expanding.
+# It is mathematically identical to Algorithm 0 but runs in seconds.
+top_genres_m3 <- edx %>%
+  group_by(genres) %>%
+  summarize(n = n()) %>% 
+  separate_rows(genres, sep = "\\|") %>%
+  group_by(genres) %>%
+  summarize(count = sum(n)) %>%
+  mutate(method = "Pre-aggregation") %>%
+  arrange(desc(count))
+
+# Verification: Compare results of Method 1 and Method 3
+head(top_genres_m3)
+
+# Movie with the greatest number of ratings
+edx %>%
+  group_by(movieId, title) %>%
+  summarize(count = n()) %>%
+  arrange(desc(count)) %>%
+  head(1)
+
+# Top 5 most given ratings
+edx %>%
+  group_by(rating) %>%
+  summarize(count = n()) %>%
+  arrange(desc(count)) %>%
+  head(5)
+
+# Comparison between whole stars and half stars
+edx %>%
+  group_by(rating) %>%
+  summarize(count = n()) %>%
+  mutate(half_star = ifelse(rating %% 1 == 0, "Whole", "Half")) %>%
+  ggplot(aes(x = factor(rating), y = count, fill = half_star)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Frequency of Ratings",
+       subtitle = "Comparison: Whole stars vs Half stars",
+       x = "Rating",
+       y = "Count",
+       fill = "Type") +
+  theme_minimal()
+
+##########################################################
+# Part 3: Creating the train_set and test_set
 ##########################################################
 # EN : Creating a training set and a test set from edx
 # FR : Création d'un set d'entraînement et d'un set de test à partir de edx
@@ -90,17 +198,17 @@ rm(test_index, temp, removed)
 
 
 ##########################################################
-# Part 3: Data exploration & visualisation.
-##########################################################
-
-#on ajoutera des choses en plus ici
-
-##########################################################
-# Part 4: Modelling and calculating the RMSE.
+# Part 4: Data exploration & visualisation.
 ##########################################################
 
 
 
 ##########################################################
-# Part 5: Final calculation on final_holdout_test.
+# Part 5: Modelling and calculating the RMSE.
+##########################################################
+
+
+
+##########################################################
+# Part 6: Final calculation on final_holdout_test.
 ##########################################################
