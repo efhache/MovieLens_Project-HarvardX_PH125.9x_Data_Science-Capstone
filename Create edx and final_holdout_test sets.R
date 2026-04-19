@@ -93,7 +93,7 @@ rm(test_index, temp, removed)
 # Part 3: Data exploration & visualisation.
 ##########################################################
 
-
+#on ajoutera des choses en plus ici
 
 ##########################################################
 # Part 4: Modelling and calculating the RMSE.
