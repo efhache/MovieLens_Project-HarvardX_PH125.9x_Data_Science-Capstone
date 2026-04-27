@@ -646,9 +646,6 @@ rmse_results <- data.frame(method = "Baseline: Global Average (mu)",
 # Display the result
 print(rmse_results)
 
-
-
-
 ##########################################################
 # Part 6: Final calculation on final_holdout_test.
 ##########################################################
