@@ -201,11 +201,451 @@ rm(test_index, temp, removed)
 # Part 4: Data exploration & visualisation.
 ##########################################################
 
+# 1. Distribution of number of ratings per movie
+# We want to show that the majority of ratings are concentrated on a few
+# blockbusters, whilst thousands of films are hardly ever watched.
 
+edx %>% 
+  count(movieId) %>% 
+  ggplot(aes(n)) + 
+  geom_histogram(bins = 30, color = "white", fill = "steelblue") + 
+  scale_x_log10() + 
+  ggtitle("Movies popularity distribution") +
+  xlab("Number of ratings (Log scale)") +
+  ylab("Number of movies") +
+  theme_minimal()
+
+# It can be seen that the distribution follows a power-law distribution.
+# This justifies the use of a film effect (item bias), as popularity is not uniform.
+
+# 2. Average rating by user
+# We want to show that some users are consistently harsher or more generous than average.
+edx %>% 
+  group_by(userId) %>% 
+  summarize(avg_rating = mean(rating)) %>% 
+  ggplot(aes(avg_rating)) + 
+  geom_histogram(bins = 30, color = "white", fill = "darkorange") + 
+  ggtitle("Average rating distribution by Users") +
+  xlab("Average Rating") +
+  ylab("Number of users") +
+  theme_minimal()
+# There is significant variation among users.
+# Some give an average score of 2, others 4.5, which justifies the inclusion of
+# the user effect (user bias).
+
+
+# 3. The danger of small sample sizes
+# Identify movies with only a few ratings that have extreme averages
+# in other words : we are going to look for the ‘best’ and ‘worst’ films that have only one rating.
+movie_titles <- edx %>% select(movieId, title) %>% distinct()
+
+edx %>% 
+  group_by(movieId) %>% 
+  summarize(n = n(), avg = mean(rating)) %>%
+  left_join(movie_titles, by = "movieId") %>%
+  filter(n <= 5) %>% 
+  arrange(desc(avg)) %>% 
+  head(10)
+# It is noticeable that the films with the highest ratings are often obscure
+# films with very few voters. This introduces noise into the model, justifying
+# the use of Regularisation (Penalised Least Squares) to penalise small samples.
+
+
+# 4. Extracting the year of the rating from the timestamp
+# We are trying to answer the questions: Do people rate films more harshly
+# over time? Or are older films rated more highly out of nostalgia?
+library(lubridate)
+edx %>% 
+  mutate(date = as_datetime(timestamp)) %>%
+  mutate(year = round_date(date, unit = "year")) %>%
+  group_by(year) %>%
+  summarize(rating = mean(rating)) %>%
+  ggplot(aes(year, rating)) +
+  geom_point() +
+  geom_smooth(method = "loess") +
+  ggtitle("Average rating by year of rating") +
+  theme_minimal()
+# The temporal analysis reveals a downward trend in average ratings from 
+# 1995 to 2005, followed by a slight recovery. This suggests a time-dependent bias, 
+# where the era of rating influences the score. While this effect is visible, 
+# its magnitude (range of ~0.4) is smaller than the movie and user effects, 
+# suggesting that while time is a factor, the primary drivers of rating variance
+# remain movie quality and individual user behavior.
+
+
+# 5. Extracting the year of release using a regular expression
+# We are trying to determine whether the ‘classics’ receive higher ratings.
+# We will therefore extract the year of release for each track.
+edx <- edx %>% 
+  mutate(release_year = as.numeric(str_extract(str_extract(title, "\\(\\d{4}\\)$"), "\\d{4}")))
+
+edx %>% 
+  group_by(release_year) %>%
+  summarize(avg_rating = mean(rating)) %>%
+  ggplot(aes(release_year, avg_rating)) +
+  geom_line(color = "darkred") +
+  labs(title = "Average Rating vs Release Year", x = "Release Year", y = "Average Rating") +
+  theme_minimal()
+
+# Selection Bias (Survivorship Bias): There is a clear trend showing that 
+#    older movies (1930-1980) tend to have higher average ratings compared 
+#    to modern movies. This suggests that only the "classics" persist in 
+#    the dataset, while mediocre older films have been filtered out by time.
+# High Variance in Early Years: The significant oscillations before 1930 
+#    are due to low sample sizes (fewer ratings for very old films). 
+# Justification for Modelling: This visualization justifies two things:
+#    a) Potential inclusion of a release year effect (b_y) in the model.
+#    b) The absolute necessity of Regularization to penalize unstable 
+#       estimates from years/movies with very few observations
+
+
+# 6. Compare the ‘Classics’ and ‘Mediocre’ effects
+# If this statement is true, we should find that older films have lower variance
+# (they are almost all ‘good’), whereas recent films have a much wider distribution
+# (there are some that are very good and some that are very bad).
+edx %>% 
+  mutate(era = ifelse(release_year < 1980, "Old (Before 1980)", "Recent (After 1980)")) %>%
+  ggplot(aes(rating, fill = era)) +
+  geom_density(alpha = 0.4) +
+  ggtitle("Distribution of Ratings: Old vs Recent Movies") +
+  theme_minimal()
+# The density plot provides a nuanced view of the Survivorship Bias:
+# Shape of Distributions: Modern movies (After 1980) show extremely sharp, 
+#    tall peaks at whole numbers (3.0, 4.0), indicating a highly concentrated 
+#    but also more critical rating behavior.
+# Density Mass: Although modern peaks are taller, older movies (Before 1980) 
+#    exhibit "fresher" or wider shoulders toward the high end of the scale. 
+#    The pink area (Old) is noticeably thicker between 4.5 and 5.0.
+# Low-End Presence: Recent movies show a significantly larger density mass 
+#    between 1 and 3, whereas older movies have almost no presence in the 
+#    very low rating zones.
+# Conclusion: This confirms that the higher average for classics isn't just 
+#    about a few high scores, but about a global shift of the entire 
+#    probability mass toward the right, as mediocre old films are absent 
+#    from the dataset.
+
+# 7. Check whether the fluctuations are due to the sample size
+# To demonstrate that the ‘jagged lines’ prior to 1930 are due to a lack of
+# data, we will correlate the year with the number of entries.
+edx %>% 
+  group_by(release_year) %>%
+  summarize(n_ratings = n()) %>%
+  ggplot(aes(release_year, n_ratings)) +
+  geom_line() +
+  scale_y_log10() +
+  ggtitle("Number of Ratings by Release Year") +
+  ylab("Count (Log Scale)") +
+  theme_minimal()
+# The log-scale distribution of ratings per release year explains the high
+# variance observed in early 20th-century cinema. With some years having fewer
+# than 100 ratings, the mean becomes highly sensitive to outliers. 
+# This empirical evidence necessitates Regularization (Penalized Least Squares)
+# to shrink these unstable estimates toward the global mean, ensuring that
+# movies with low exposure do not unfairly bias the recommendation engine.
+
+
+# 8. User ‘Strictness’ (Number of ratings vs Average rating)
+# We aim to answer the following question : 
+# Are users who rate a lot (the ‘critics’) stricter than those who only rate a few films?
+edx %>% 
+  group_by(userId) %>% 
+  summarize(n_user = n(), avg_user = mean(rating)) %>% 
+  filter(n_user >= 10) %>% # On ignore ceux qui ont trop peu de notes pour être significatifs
+  ggplot(aes(n_user, avg_user)) +
+  geom_point(alpha = 0.1, color = "darkblue") +
+  #geom_smooth(method = "loess", color = "red") +
+  # On utilise "gam" au lieu de "loess" pour gérer le volume de données
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), color = "red") +
+  scale_x_log10() +
+  labs(title = "User Rating Habit",
+       subtitle = "Method: GAM smoothing for large datasets",
+       x = "Number of ratings per User (Log Scale)",
+       y = "Average Rating given") +
+  theme_minimal()
+# The scatter plot reveals a clear "funnel effect": 
+# Variance vs Volume: Users with fewer ratings (left side) exhibit extreme 
+# average ratings (0.5 or 5.0), showing high estimation instability. 
+# Convergence: As the number of ratings increases (right side), the averages 
+# converge toward the global mean (~3.6). 
+# Regularization Necessity: This visualization is a textbook justification 
+# for Regularization. We must penalize (shrink) the biases of users with 
+# low rating counts to prevent them from skewing the model's predictions.
+#
+# The GAM smoothing reveals a non-linear relationship between user activity 
+# and rating behavior. The downward trend for high-volume users proves that a 
+# simple global mean (μ) is insufficient. We must incorporate a user-specific 
+# bias to account for this shift in scale, while applying regularization to 
+# stabilize the extreme averages seen in low-volume users (left side of the plot).
+
+
+
+# 9. Analysis of the Title-Genre Correlation (The keyword ‘Series’)
+# Sometimes, certain words in titles indicate a particular characteristic.
+# For example, films that are part of a franchise. We can check whether films
+# with long titles or specific parentheses receive higher ratings.
+# But more simply, we can look at the standard deviation of ratings per user:
+edx %>% 
+  group_by(userId) %>% 
+  filter(n() >= 50) %>%
+  summarize(sd_user = sd(rating)) %>%
+  ggplot(aes(sd_user)) +
+  geom_histogram(bins = 30, fill = "darkgreen", color = "white") +
+  labs(title = "Distribution of Rating Variability per User",
+       subtitle = "Standard Deviation of ratings for users with >50 ratings",
+       x = "Standard Deviation",
+       y = "Number of Users") +
+  theme_minimal()
+# The distribution of standard deviations confirms that users not only haveµ
+# different averages, but also radically different rating behaviours
+# (some being very consistent, others very inconsistent).
+
+# 10. Impact of genre complexity on ratings
+# Some films belong to just one genre (e.g. ‘Drama’), whilst others belong to
+# eight (e.g. ‘Action|Adventure|Sci-Fi|...’). So, we’re going to investigate
+# whether a film’s complexity (the number of genres) influences its rating.
+edx %>% 
+  mutate(n_genres = str_count(genres, "\\|") + 1) %>%
+  group_by(n_genres) %>%
+  summarize(avg_rating = mean(rating), n = n()) %>%
+  ggplot(aes(n_genres, avg_rating)) +
+  geom_line(color = "purple", size = 1) +
+  geom_point(aes(size = n), color = "purple") +
+  labs(title = "Average Rating by Number of Genres",
+       x = "Number of Genres assigned to a Movie",
+       y = "Average Rating",
+       size = "Number of ratings") +
+  theme_minimal()
+# Positive Trend (1-5 genres): Average ratings increase with the number 
+# of genres, suggesting that "multi-genre" movies are perceived as 
+# richer or appeal to a broader audience.
+# Threshold Effect (6+ genres): A sharp drop is observed, but the 
+# decreasing size of the data points indicates a "Small Sample Size" issue.
+# Statistical Verdict: The volatility for 6+ genres is due to the low 
+# number of ratings (low N), similar to the effect seen in very old films.
+# Modeling Impact: This reinforces the idea that genre combinations 
+# influence ratings, justifying the use of advanced bias modeling or 
+# Regularization to handle these low-frequency combinations.
+
+
+# 11. Age of the movie at the time of rating
+# We investigate the "Nostalgia vs. Hype" effect: Does a movie's age when
+# it is rated influence the score? This analysis combines the release year 
+# and the timestamp to see if older films are judged more leniently.
+edx %>% 
+  mutate(date = as_datetime(timestamp)) %>%
+  mutate(rating_year = year(date)) %>%
+  mutate(age_at_rating = rating_year - release_year) %>%
+  filter(age_at_rating >= 0) %>%
+  group_by(age_at_rating) %>%
+  summarize(avg_rating = mean(rating)) %>%
+  ggplot(aes(age_at_rating, avg_rating)) +
+  geom_line(color = "darkgreen") +
+  geom_smooth(method = "gam", color = "red") +
+  labs(title = "Average Rating vs Movie Age at Rating Time",
+       x = "Age of Movie (Years)",
+       y = "Average Rating") +
+  theme_minimal()
+# Maturation Effect: Ratings significantly increase during the first 25 years
+# after release, showing that time filters out initial hype or general criticism. 
+# Golden Era: Movies aged 30 to 60 years maintain the highest average ratings 
+# (~3.9), confirming a strong survivorship bias and "classic" status. 
+# Old Age Volatility: Beyond 80 years, the sharp decline and wide confidence 
+# interval (grey area) reflect the scarcity of data for very old cinema. 
+# Conclusion: Age is a powerful predictor. This justifies using it as a 
+# feature or, at the very least, using Regularization to handle the 
+# unstable predictions for the oldest films.
+#
+# Interestingly, the confidence interval narrows significantly around age 
+# 85-90 despite the rating drop. This suggests a high concentration of ratings 
+# for a very small number of specific silent-era masterpieces, which are rated 
+# more harshly by contemporary users than the 'Golden Age' classics of the 1950s.
+
+
+# 12. Day of the week effect
+# We test if users are more generous on weekends vs weekdays.
+edx %>%
+  mutate(date = as_datetime(timestamp),
+         day_of_week = wday(date, label = TRUE, abbr = FALSE)) %>%
+  group_by(day_of_week) %>%
+  summarize(avg_rating = mean(rating)) %>%
+  ggplot(aes(day_of_week, avg_rating, fill = day_of_week)) +
+  geom_bar(stat = "identity") +
+  coord_cartesian(ylim = c(3.4, 3.7)) +
+  labs(title = "Average Rating by Day of the Week",
+       x = "Day of the Week", y = "Average Rating") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+# Interpretation: If a difference exists, it shows that the context of 
+# the rating (leisure time vs work week) is a subtle bias to consider.
+# Conclusion: The visualization reveals that the average rating remains 
+# remarkably stable across the week, with variations of less than 0.05 
+# points between workdays and weekends. 
+# While original as a hypothesis, the "Day of the Week" does not appear 
+# to be a significant predictor for this dataset. 
+# To maintain model parsimony (Occam's Razor), this feature will likely 
+# be excluded from the final algorithm as it would add complexity 
+# without significantly improving the RMSE.
+
+
+# 13. Title Length Bias
+# Does the length of a movie title correlate with its rating?
+edx %>%
+  mutate(title_length = nchar(title)) %>%
+  group_by(title_length) %>%
+  summarize(avg_rating = mean(rating), n = n()) %>%
+  filter(n >= 50) %>% # On ignore les longueurs trop rares
+  ggplot(aes(title_length, avg_rating)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "gam", color = "darkblue") +
+  labs(title = "Average Rating vs Title Length",
+       x = "Number of characters in title",
+       y = "Average Rating") +
+  theme_minimal()
+
+# Interpretation: This explores if "short & punchy" titles perform 
+# differently than "long & descriptive" ones.
+# Conclusion: The GAM smoothing line is nearly flat, indicating no 
+# significant correlation between title length and movie ratings. 
+# While certain studies suggest title length can influence engagement, 
+# it does not act as a bias in the MovieLens 10M dataset. 
+# This experiment allows us to discard this variable and focus on 
+# more impactful predictors like movie and user effects.
+
+
+# 14. Genre Loyalty / Specialization
+# Do "genre specialists" rate differently than casual viewers?
+# We focus on the most common genre: Drama
+drama_fans <- edx %>%
+  group_by(userId) %>%
+  summarize(drama_ratio = mean(str_detect(genres, "Drama")),
+            avg_user_rating = mean(rating)) %>%
+  filter(drama_ratio > 0)
+
+ggplot(drama_fans, aes(drama_ratio, avg_user_rating)) +
+  geom_point(alpha = 0.1, color = "darkred") +
+  geom_smooth(method = "gam", color = "black") +
+  labs(title = "Drama Specialization vs Average Rating",
+       x = "Proportion of Drama movies rated",
+       y = "User Average Rating") +
+  theme_minimal()
+
+# Interpretation: If the line goes down, it means that the more a user 
+# watches a specific genre, the more "expert" and critical they become.
+
+##update 14. to zoom on part between 3.4 and 3.8
+# 14. Genre Loyalty / Specialization (REVISITED)
+drama_fans <- edx %>%
+  group_by(userId) %>%
+  summarize(drama_ratio = mean(str_detect(genres, "Drama")),
+            avg_user_rating = mean(rating)) %>%
+  filter(drama_ratio > 0)
+
+ggplot(drama_fans, aes(drama_ratio, avg_user_rating)) +
+  # On réduit l'opacité des points au minimum pour ne voir que la masse
+  geom_point(alpha = 0.02, color = "gray") + 
+  # On garde la ligne noire bien visible
+  geom_smooth(method = "gam", color = "black", size = 1.2) +
+  # C'EST ICI QUE TOUT SE JOUE : On zoome pour voir les variations
+  coord_cartesian(ylim = c(3.5, 3.7)) + 
+  labs(title = "Focus: Drama Specialization vs Average Rating",
+       subtitle = "Zoomed Y-axis to highlight the non-linear trend",
+       x = "Proportion of Drama movies rated",
+       y = "User Average Rating") +
+  theme_minimal()
+# Conclusion: The analysis reveals that "Drama specialists" (users with a 
+# high drama ratio) tend to give significantly higher ratings than average. 
+# While the global mean is around 3.5, users specialized in Drama often 
+# exceed 3.65. This confirms a strong interaction between user preference 
+# and this specific genre, justifying why a simple movie-effect model 
+# isn't enough and why we need to account for these "loyal" user profiles.
+
+# 14b. Cross-Genre Loyalty Comparison (Version Corrigée)
+genres_to_test <- c("Drama", "Comedy", "Action", "Thriller", "Sci-Fi", "Horror")
+
+# Fonction corrigée (on s'assure que les noms de colonnes matchent le ggplot)
+check_genre_loyalty <- function(genre_name) {
+  edx %>%
+    group_by(userId) %>%
+    summarize(ratio = mean(str_detect(genres, genre_name)),
+              avg_rating = mean(rating), # Nom de colonne : avg_rating
+              .groups = "drop") %>%
+    filter(ratio > 0) %>%
+    mutate(genre = genre_name)
+}
+
+# Application de la fonction sur les genres sélectionnés
+loyalty_data <- map_df(genres_to_test, check_genre_loyalty)
+
+# Visualisation corrigée
+ggplot(loyalty_data, aes(x = ratio, y = avg_rating)) + # Utilisation de avg_rating
+  # On utilise geom_bin2d ou alpha très bas pour ne pas saturer la RAM à l'affichage
+  geom_smooth(method = "gam", color = "darkblue", size = 1) +
+  facet_wrap(~genre, scales = "free") +
+  coord_cartesian(ylim = c(3.2, 4.0)) + # Zoom pour bien voir les pentes
+  labs(title = "Specialization Effect across Multiple Genres",
+       subtitle = "Comparison of rating trends by user loyalty",
+       x = "Proportion of genre in user's history",
+       y = "User Average Rating") +
+  theme_minimal()
+# Conclusion: This multi-genre comparison reveals a fascinating "Specialization Paradox". 
+# While "Drama" shows a positive loyalty effect (ratings increase with exposure), 
+# "Horror" and "Sci-Fi" exhibit a strong negative loyalty effect: the more 
+# users watch these genres, the more critical they become, significantly 
+# lowering their average ratings. 
+# "Comedy" and "Action" show a neutral trend after an initial stabilization. 
+# This diversity of behaviors proves that a global "User Effect" or "Genre Effect" 
+# is insufficient; we need a model that captures these complex interactions.
 
 ##########################################################
 # Part 5: Modelling and calculating the RMSE.
 ##########################################################
+
+# DATA REFRESH 
+# IMPORTANT: We re-run the split from Part 3 because we added new features 
+# to 'edx' (release_year, age_at_rating, rating_year) during exploration. 
+# Re-splitting ensures that 'train_set' and 'test_set' contain these variables 
+# for the modeling phase.
+
+set.seed(1, sample.kind="Rounding")
+test_index <- createDataPartition(y = edx$rating, times = 1, p = 0.2, list = FALSE)
+train_set <- edx[-test_index,]
+temp <- edx[test_index,]
+
+# Ensure userId and movieId in test_set are also in train_set
+test_set <- temp %>% 
+  semi_join(train_set, by = "movieId") %>%
+  semi_join(train_set, by = "userId")
+
+# Add back rows removed from test_set to train_set to maintain data integrity
+removed <- anti_join(temp, test_set)
+train_set <- rbind(train_set, removed)
+
+rm(test_index, temp, removed)
+# END DATA REFRESH
+
+# 1. Define the RMSE function
+# This function will be our judge for all subsequent models.
+RMSE <- function(true_ratings, predicted_ratings){
+  sqrt(mean((true_ratings - predicted_ratings)^2))
+}
+
+# 2. Model 1: Naive Baseline (Just the average)
+# We assume the best prediction for any movie/user combination is the 
+# average rating of the entire training set.
+mu_hat <- mean(train_set$rating)
+
+# Calculate RMSE on the test set
+naive_rmse <- RMSE(test_set$rating, mu_hat)
+
+# Create a results table to track our progress
+# We will add every new model result to this data frame.
+rmse_results <- data.frame(method = "Baseline: Global Average (mu)", 
+                           RMSE = naive_rmse)
+
+# Display the result
+print(rmse_results)
+
 
 
 
