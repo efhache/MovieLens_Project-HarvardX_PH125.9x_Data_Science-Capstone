@@ -597,6 +597,44 @@ ggplot(loyalty_data, aes(x = ratio, y = avg_rating)) + # Utilisation de avg_rati
 # This diversity of behaviors proves that a global "User Effect" or "Genre Effect" 
 # is insufficient; we need a model that captures these complex interactions.
 
+# 15. Visualizing Matrix Sparsity and Latent Structure
+# Note: Instead of a descriptive heatmap, I use an abstract 'Sparsity Matrix'. 
+#
+# WHY THIS APPROACH?
+# 1. STRUCTURAL OVERVIEW: By removing movie titles and user IDs, we shift the focus 
+#    from individual data points to the global architecture of the dataset.
+# 2. SPARSITY DEMONSTRATION: By using a RANDOM sample, the 'white space' visually 
+#    proves the fundamental challenge: most users haven't seen most movies.
+# 3. PATTERN RECOGNITION: The rare vertical and horizontal streaks reveal the few 
+#    prolific users and popular movies that provide the 'anchors' for our models.
+# 4. MATH TRANSITION: This visual justifies the use of Matrix Factorization to 
+#    predict the missing values (the white areas) mathematically.
+
+set.seed(42)
+
+# We take 200 users and 200 films at random to see the actual rarity
+random_users <- sample(unique(edx$userId), 200)
+random_movies <- sample(unique(edx$movieId), 200)
+
+heatmap_data <- edx %>% 
+  filter(userId %in% random_users & movieId %in% random_movies)
+
+# Visualisation to bring out streaks and voids
+ggplot(heatmap_data, aes(x = as.factor(movieId), y = as.factor(userId), fill = rating)) +
+  geom_tile() +
+  scale_fill_viridis_c(option = "magma", na.value = "white") +
+  # Force the full grid to be displayed even where there is no data
+  scale_x_discrete(drop = FALSE) + 
+  scale_y_discrete(drop = FALSE) +
+  theme_minimal() +
+  theme(axis.text = element_blank(),
+        panel.grid = element_blank()) +
+  labs(title = "True Matrix Sparsity (Random 100x100 Sample)",
+       subtitle = "White areas represent missing ratings (unseen movies)",
+       x = "Movies (Random Sample)",
+       y = "Users (Random Sample)")
+
+
 ##########################################################
 # Part 5: Modelling and calculating the RMSE.
 ##########################################################
