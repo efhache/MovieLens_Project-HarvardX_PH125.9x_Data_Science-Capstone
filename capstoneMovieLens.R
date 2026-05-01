@@ -93,6 +93,14 @@ count_3 <- sum(edx$rating == 3)
 message(paste("Number of 0 ratings:", count_0))
 message(paste("Number of 3 ratings:", count_3))
 
+# Visualisation of the rate distribution
+# This shows whether users are generous or strict.
+edx %>% ggplot(aes(rating)) + 
+  geom_histogram(binwidth = 0.5, color = "black", fill = "steelblue") + 
+  ggtitle("Rating distribution (edx)") +
+  xlab("Rates") + ylab("Number of ratings")
+
+
 # 5. Identifying the most rated genres (simple top 10)
 # NOTE ON COMPUTATIONAL LIMITATIONS:
 # The standard approach using separate_rows() directly on the 9M row 'edx' dataset
@@ -399,6 +407,15 @@ edx %>%
 # different averages, but also radically different rating behaviours
 # (some being very consistent, others very inconsistent).
 
+# Number of ratings per user
+# Do some users leave few reviews? This might require some adjustment
+edx %>% count(userId) %>% 
+  ggplot(aes(n)) + 
+  geom_histogram(bins = 30, color = "black", fill = "forestgreen") + 
+  scale_x_log10() +
+  ggtitle("Number of ratings per user (log scale)") +
+  xlab("Number of ratings") + ylab("Users")
+
 # 10. Impact of genre complexity on ratings
 # Some films belong to just one genre (e.g. ‘Drama’), whilst others belong to
 # eight (e.g. ‘Action|Adventure|Sci-Fi|...’). So, we’re going to investigate
@@ -460,6 +477,14 @@ edx %>%
 # for a very small number of specific silent-era masterpieces, which are rated 
 # more harshly by contemporary users than the 'Golden Age' classics of the 1950s.
 
+
+# Average rating by year of release
+edx %>% group_by(release_year) %>%
+  summarize(avg_rating = mean(rating)) %>%
+  ggplot(aes(release_year, avg_rating)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "loess", color = "red") +
+  ggtitle("Effect of the year of release on the average rating")
 
 # 12. Day of the week effect
 # We test if users are more generous on weekends vs weekdays.
@@ -1213,6 +1238,14 @@ rmse_results <- rbind(rmse_results,
 
 print(rmse_results)
 cat(">>> OFFICIAL FINAL SCORE (Hold-out):", final_holdout_rmse)
+
+# Final result (formatted)
+final_table <- data.frame(
+  "Threshold_Target" = 0.86490,
+  "RMSE_Final" = final_holdout_rmse,
+  "Performance" = ifelse(final_holdout_rmse < 0.86490, "Target Achieved", "Target Not Met")
+)
+print(final_table)
 
 # 7. Cleanup to free memory
 rm(b_i, b_u, b_g, b_y, b_t, final_predictions)
