@@ -1,0 +1,17 @@
+Report outline:
+Title Page (Title, Name, Date)
+
+# Abstract / Executive Summary (Project summary and final score of 0.8633)
+# Introduction
+  ## Background to the MovieLens 10M project.
+  ## Objective: To predict ratings with an RMSE < 0.8649.
+# Methods & Analysis
+  ## Data Preparation: Creation of the edx and final_holdout_test datasets.
+  ## Exploratory Data Analysis (EDA): Key visualisations (distribution, visual effects).
+  ## Modelling Approach: From simple averaging to a regularised model with backfitting.
+# Results
+  ## Performance on the test set.
+  ## Final validation on the hold-out set.
+# Conclusion
+  ## Summary of performance.
+  ## Limitations and future prospects.
