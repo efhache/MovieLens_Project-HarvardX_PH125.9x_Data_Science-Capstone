@@ -961,9 +961,259 @@ rmse_results <- rbind(rmse_results,
                                  RMSE = final_rmse))
 print(rmse_results)
 
+# 7. Model 6: Adding Time Effect (Week-based) - Optimized for RAM
+# One initial approach would be to use the round_any function (which is part of 
+# the plyr package), but as I have a 6 GB RAM limit, loading the entire plyr 
+# package could lead to excessive memory usage, and it conflicts with dplyr (tidyverse).
+# The preferred option is therefore to use a simple mathematical formula in basic
+# R to do exactly the same thing (round the timestamp to the nearest week).
 
+# 604800 seconds = 7 days * 24h * 3600s
+
+# Feature engineering without external packages
+train_set <- train_set %>% 
+  mutate(date = floor(timestamp / 604800) * 604800)
+
+test_set <- test_set %>% 
+  mutate(date = floor(timestamp / 604800) * 604800)
+
+# We use the best lambda found previously
+l <- 4.75
+
+# Calculation of the time effect b_t
+# We subtract all previous effects to isolate the variation due to time
+b_t <- train_set %>%
+  left_join(b_i, by="movieId") %>%
+  left_join(b_u, by="userId") %>%
+  left_join(b_g, by="genres") %>%
+  left_join(b_y, by="release_year") %>%
+  group_by(date) %>%
+  summarize(b_t = sum(rating - mu - b_i - b_u - b_g - b_y) / (n() + l))
+
+# Interim test on the test_set
+predicted_ratings_t <- test_set %>%
+  left_join(b_i, by = "movieId") %>%
+  left_join(b_u, by = "userId") %>%
+  left_join(b_g, by = "genres") %>%
+  left_join(b_y, by = "release_year") %>%
+  left_join(b_t, by = "date") %>%
+  mutate(pred = mu + b_i + b_u + b_g + b_y + b_t) %>%
+  pull(pred)
+
+# Handling unknown dates (NAs)
+predicted_ratings_t[is.na(predicted_ratings_t)] <- mu
+
+# Displaying the new test RMSE
+current_rmse <- RMSE(predicted_ratings_t, test_set$rating)
+cat("Current RMSE with time-varying effects:", current_rmse)
+
+
+# 8. Model 7: Backfitting + Capping - OPTIMISED FOR VM 6GO
+# what trying to do:
+# 1. BIAS CONVERGENCE (Backfitting): In previous models, b_i was calculated 
+# independently of b_u. However, movie and user effects are interconnected. 
+# Recalculating b_i after estimating b_u (Backfitting) allows the biases to 
+# account for each other, leading to more stable and accurate estimates. 
+# 2. DATA BOUNDARY LOGIC (Capping): Linear models can predict values > 5 or < 0.5. 
+
+# 1. Harmonisation du nom de la variable mu
+mu <- mu_hat
+
+# 2. Préparation des colonnes nécessaires (Feature Engineering)
+# Pour le train_set
+train_set <- train_set %>% 
+  mutate(release_year = as.numeric(str_extract(str_extract(title, "\\(\\d{4}\\)$"), "\\d{4}")),
+         date = floor(timestamp / 604800) * 604800)
+
+# Pour le test_set
+test_set <- test_set %>% 
+  mutate(release_year = as.numeric(str_extract(str_extract(title, "\\(\\d{4}\\)$"), "\\d{4}")),
+         date = floor(timestamp / 604800) * 604800)
+
+lambdas_finetune <- seq(3.5, 5.5, 0.25)
+
+rmses_model7 <- sapply(lambdas_finetune, function(l){
+  
+  # PASSE 1
+  b_i <- train_set %>% 
+    group_by(movieId) %>% 
+    summarize(b_i = sum(rating - mu)/(n()+l))
+  
+  b_u <- train_set %>% 
+    left_join(b_i, by="movieId") %>% 
+    group_by(userId) %>% 
+    summarize(b_u = sum(rating - mu - b_i)/(n()+l))
+  
+  # PASSE 2 (Refinement) - On réécrase b_i pour ne pas stocker deux versions
+  b_i <- train_set %>% 
+    left_join(b_u, by="userId") %>% 
+    group_by(movieId) %>% 
+    summarize(b_i = sum(rating - mu - b_u)/(n()+l))
+  
+  # Autres effets calculés séquentiellement
+  b_g <- train_set %>%
+    left_join(b_i, by="movieId") %>%
+    left_join(b_u, by="userId") %>%
+    group_by(genres) %>%
+    summarize(b_g = sum(rating - mu - b_i - b_u)/(n()+l))
+  
+  b_y <- train_set %>%
+    left_join(b_i, by="movieId") %>%
+    left_join(b_u, by="userId") %>%
+    left_join(b_g, by="genres") %>%
+    group_by(release_year) %>%
+    summarize(b_y = sum(rating - mu - b_i - b_u - b_g)/(n()+l))
+  
+  b_t <- train_set %>%
+    left_join(b_i, by="movieId") %>%
+    left_join(b_u, by="userId") %>%
+    left_join(b_g, by="genres") %>%
+    left_join(b_y, by="release_year") %>%
+    group_by(date) %>%
+    summarize(b_t = sum(rating - mu - b_i - b_u - b_g - b_y)/(n()+l))
+  
+  # Prédiction avec Capping (pmin/pmax est très efficace en mémoire)
+  preds <- test_set %>% 
+    left_join(b_i, by = "movieId") %>%
+    left_join(b_u, by = "userId") %>%
+    left_join(b_g, by = "genres") %>%
+    left_join(b_y, by = "release_year") %>%
+    left_join(b_t, by = "date") %>%
+    mutate(pred = mu + b_i + b_u + b_g + b_y + b_t) %>%
+    mutate(pred = pmin(5, pmax(0.5, pred))) %>% 
+    pull(pred)
+  
+  preds[is.na(preds)] <- mu
+  rmse_val <- RMSE(preds, test_set$rating)
+  
+  # NETTOYAGE CRITIQUE POUR VM 6GO
+  rm(b_i, b_u, b_g, b_y, b_t, preds)
+  gc() # Force la libération de la RAM avant le prochain lambda
+  
+  return(rmse_val)
+})
+
+best_l_m7 <- lambdas_finetune[which.min(rmses_model7)]
+best_rmse_m7 <- min(rmses_model7)
+
+# Affichage des résultats
+cat("--- RÉSULTATS MODÈLE 7 ---")
+cat("Optimal Lambda (Test Set):", best_l_m7)
+cat("Improved Test RMSE:", best_rmse_m7)
+
+# Mise à jour du tableau de suivi des résultats
+rmse_results <- rbind(rmse_results,
+                      data.frame(method = "Model 7: Backfitting + Capping + All Effects",  
+                                 RMSE = best_rmse_m7))
+
+# Visualisation de l'optimisation
+plot(lambdas_finetune, rmses_model7, type = "b", 
+     main = "Optimization of Lambda for Model 7",
+     xlab = "Lambda", ylab = "RMSE")
 
 ##########################################################
 # Part 6: Final calculation on final_holdout_test.
 ##########################################################
+# Having found the optimal lambda (best_l_m7) using the train/test split, 
+# we now retrain the model on the ENTIRE 'edx' dataset. 
+# Mathematically, this maximizes the information used to estimate biases, 
+# leading to more stable predictors. The 'final_holdout_test' remains 
+# untouched until this very last step to ensure a true "blind" evaluation.
 
+# NOTE: 
+# The final_holdout_test provided by HarvardX does not contain a 'release_year' 
+# column by default. However, our best performing model uses this feature.
+# To ensure consistency, we perform feature extraction from the 'title' column 
+# (which is provided). This is NOT an alteration of the data points themselves, 
+# but a transformation of existing information to match our model's requirements.
+
+
+# 1. Prepare the final hold-out set (Feature Extraction)
+final_holdout_test <- final_holdout_test %>% 
+  mutate(
+    # Extract release year from title
+    release_year = as.numeric(str_extract(str_extract(title, "\\(\\d{4}\\)$"), "\\d{4}")),
+    # Convert timestamp to week units
+    date = floor(timestamp / 604800) * 604800
+  )
+
+
+# 2. Final Parameter Assignment
+l_final <- best_l_m7
+mu_edx <- mean(edx$rating) # Global average of the full edx set
+
+# Ajout des colonnes nécessaires à edx pour le modèle final
+edx <- edx %>% 
+  mutate(release_year = as.numeric(str_extract(str_extract(title, "\\(\\d{4}\\)$"), "\\d{4}")),
+         date = floor(timestamp / 604800) * 604800)
+
+# Nettoyage pour libérer de la RAM après la mutation
+gc()
+
+# 3. Final Bias Calculation on EDX (using Backfitting logic)
+# PASSE 1
+b_i <- edx %>% 
+  group_by(movieId) %>% 
+  summarize(b_i = sum(rating - mu_edx)/(n() + l_final))
+
+b_u <- edx %>% 
+  left_join(b_i, by="movieId") %>% 
+  group_by(userId) %>% 
+  summarize(b_u = sum(rating - mu_edx - b_i)/(n() + l_final))
+
+# PASSE 2 (Refinement)
+b_i <- edx %>% 
+  left_join(b_u, by="userId") %>% 
+  group_by(movieId) %>% 
+  summarize(b_i = sum(rating - mu_edx - b_u)/(n() + l_final))
+
+# Sequential calculation for other effects
+b_g <- edx %>%
+  left_join(b_i, by="movieId") %>%
+  left_join(b_u, by="userId") %>%
+  group_by(genres) %>%
+  summarize(b_g = sum(rating - mu_edx - b_i - b_u)/(n() + l_final))
+
+b_y <- edx %>%
+  left_join(b_i, by="movieId") %>%
+  left_join(b_u, by="userId") %>%
+  left_join(b_g, by="genres") %>%
+  group_by(release_year) %>%
+  summarize(b_y = sum(rating - mu_edx - b_i - b_u - b_g)/(n() + l_final))
+
+b_t <- edx %>%
+  left_join(b_i, by="movieId") %>%
+  left_join(b_u, by="userId") %>%
+  left_join(b_g, by="genres") %>%
+  left_join(b_y, by="release_year") %>%
+  group_by(date) %>%
+  summarize(b_t = sum(rating - mu_edx - b_i - b_u - b_g - b_y)/(n() + l_final))
+
+# 4. FINAL PREDICTION with Capping
+final_predictions <- final_holdout_test %>% 
+  left_join(b_i, by = "movieId") %>%
+  left_join(b_u, by = "userId") %>%
+  left_join(b_g, by = "genres") %>%
+  left_join(b_y, by = "release_year") %>%
+  left_join(b_t, by = "date") %>%
+  mutate(pred = mu_edx + b_i + b_u + b_g + b_y + b_t) %>%
+  mutate(pred = pmin(5, pmax(0.5, pred))) %>% 
+  pull(pred)
+
+# Handle potential NAs for items/users not in edx
+final_predictions[is.na(final_predictions)] <- mu_edx
+
+# 5. THE VERDICT: FINAL RMSE
+final_holdout_rmse <- RMSE(final_holdout_test$rating, final_predictions)
+
+# 6. Final Results Table
+rmse_results <- rbind(rmse_results,
+                      data.frame(method = "FINAL MODEL: Backfitting + Capping (Full edx set)",  
+                                 RMSE = final_holdout_rmse))
+
+print(rmse_results)
+cat(">>> OFFICIAL FINAL SCORE (Hold-out):", final_holdout_rmse)
+
+# 7. Cleanup to free memory
+rm(b_i, b_u, b_g, b_y, b_t, final_predictions)
+gc()
