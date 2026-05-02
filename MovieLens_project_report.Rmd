@@ -22,8 +22,7 @@ library(lubridate)
 
 # Introduction
 
-The goal of this project is to develop a movie recommendation system using the MovieLens 10M dataset. In a world of overflowing digital content, recommendation algorithms are essential tools that help users discover items they are likely to enjoy based on their previous behavior and the behavior of others.
-The main objective is to develop an algorithm capable of predicting user ratings with a high degree of accuracy, as measured by the root mean square error (RMSE).
+The goal of this project is to develop a movie recommendation system using the MovieLens 10M dataset. In a world of overflowing digital content, recommendation algorithms are essential tools that help users discover items they are likely to enjoy based on their previous behavior and the behavior of others. The main objective is to develop an algorithm capable of predicting user ratings with a high degree of accuracy, as measured by the root mean square error (RMSE).
 
 ## Project Objective
 
@@ -35,17 +34,18 @@ A significant aspect of this work is the technical constraint under which it was
 
 This constraint influenced the modeling strategy:
 
--  Efficiency: We prioritized a regularized linear model optimised by backfitting over more memory-intensive techniques. This approach offers an excellent balance between predictive performance and resource consumption, whereas more resource-intensive methods (such as complex matrix factorisation) might have overloaded the system.
+- Efficiency: We prioritized a regularized linear model optimised by backfitting over more memory-intensive techniques. This approach offers an excellent balance between predictive performance and resource consumption, whereas more resource-intensive methods (such as complex matrix factorisation) might have overloaded the system.
 
--  Optimization: Explicit memory management (using gc() to clean up memory) was integrated into the workflow to ensure the system remained stable despite the large dataset size (10 million entries).
+- Optimization: Explicit memory management (using gc() to clean up memory) was integrated into the workflow to ensure the system remained stable despite the large dataset size (10 million entries).
 
 # Methods and Analysis
 
 ## Data Preparation
+
 As per the instructions provided by the HarvardX course, the initial code to download the MovieLens 10M dataset and split it into two sets was used:
 
-1.   **edx set**: Used for data exploration, model training, and parameter tuning.
-2.   **final_holdout_test set**: Kept strictly separate and used only for the final assessment of the model's accuracy.
+1.  **edx set**: Used for data exploration, model training, and parameter tuning.
+2.  **final_holdout_test set**: Kept strictly separate and used only for the final assessment of the model's accuracy.
 
 ```{r data-preparation, cache=TRUE}
 # Note: this process could take a couple of minutes
@@ -111,8 +111,11 @@ rm(dl, ratings, movies, test_index, temp, movielens, removed)
 ```
 
 ### Feature Engineering
+
 To move beyond a simple average, we extracted two key temporal variables from the raw data:
+
 - **Release Year**: Extracted from the movie title to see if "classics" are rated differently than modern blockbusters.
+
 - **Review Week (Date)**: Extracted from the timestamp to capture trends in rating behavior over time.
 
 Before proceeding with the exploratory analysis, we transform the raw data to extract specific features. This step is essential because our final modeling strategy (detailed in Section 4) will move beyond simple averages to incorporate temporal and movie-age effects. By extracting the release year from the titles and converting the timestamps into weekly dates at this stage, we can visualize these trends before formally integrating them into our regularized model.
@@ -135,18 +138,19 @@ final_holdout_test <- final_holdout_test %>%
 Before building the model, we performed a rigorous inspection of the `edx` dataset to validate its structure and content. This initial exploration validates the data structure and answers the project's fundamental questions through direct code execution.
 
 > **In summary, the key questions and their answers are as follows:**
-> 
-> * **Dataset Dimensions**: The dataset contains **9,000,055 rows** and **6 columns**.
-> * **Rating Values**: 
->     * No ratings of **0** were given, which is consistent with the MovieLens scale (0.5 to 5).
->     * There are **2,121,240** ratings of **3**.
-> * **Unique Entries**: There are **10,677 unique movies** and **69,878 unique users**.
-> * **Genre Distribution**: Drama is the most rated genre (**3,910,127**), followed by Comedy (**3,540,930**), Thriller (**2,325,899**), and Romance (**1,712,100**).
-> * **Most Popular Movie**: *Pulp Fiction (1994)* holds the record for the greatest number of ratings.
-> * **Rating Frequency**: The five most common ratings are, in order: **4, 3, 5, 3.5, and 2**. 
-> * **Rating Type Bias**: As observed, half-star ratings are significantly less common than whole-star ratings, suggesting a psychological preference for integer scores.
+>
+> - **Dataset Dimensions**: The dataset contains **9,000,055 rows** and **6 columns**.
+> - **Rating Values**:
+>   - No ratings of **0** were given, which is consistent with the MovieLens scale (0.5 to 5).
+>   - There are **2,121,240** ratings of **3**.
+> - **Unique Entries**: There are **10,677 unique movies** and **69,878 unique users**.
+> - **Genre Distribution**: Drama is the most rated genre (**3,910,127**), followed by Comedy (**3,540,930**), Thriller (**2,325,899**), and Romance (**1,712,100**).
+> - **Most Popular Movie**: *Pulp Fiction (1994)* holds the record for the greatest number of ratings.
+> - **Rating Frequency**: The five most common ratings are, in order: **4, 3, 5, 3.5, and 2**.
+> - **Rating Type Bias**: As observed, half-star ratings are significantly less common than whole-star ratings, suggesting a psychological preference for integer scores.
 
 #### Dataset Dimensions and Basic Statistics
+
 We first verified the volume of data and the range of ratings.
 
 ```{r data-dimensions}
@@ -174,11 +178,10 @@ count_3 <- sum(edx$rating == 3)
 message(paste("Number of 0 ratings:", count_0))
 message(paste("Number of 3 ratings:", count_3))
 ```
-The inspection of the `edx` dataset reveals a massive volume of data, consisting of **`r format(res_dim[1], big.mark=",")`** rows and **`r res_dim[2]`** columns. 
 
-Among these records, we identify:
-- **`r format(n_unique_users, big.mark=",")`** unique users.
-- **`r format(n_unique_movies, big.mark=",")`** unique movies.
+The inspection of the `edx` dataset reveals a massive volume of data, consisting of **`r format(res_dim[1], big.mark=",")`** rows and **`r res_dim[2]`** columns.
+
+Among these records, we identify: - **`r format(n_unique_users, big.mark=",")`** unique users. - **`r format(n_unique_movies, big.mark=",")`** unique movies.
 
 Regarding the rating values, we confirmed the integrity of the scale: there are **`r count_0`** ratings of zero (as expected for a 0.5 to 5.0 scale), while the score of 3 appears **`r format(count_3, big.mark=",")`** times.
 
@@ -196,6 +199,7 @@ edx %>% ggplot(aes(rating)) +
   ggtitle("General Distribution of Ratings") +
   xlab("Rating") + ylab("Count")
 ```
+
 The histogram reveals a "positivity bias," with most ratings above 3. Furthermore, we can clearly see that whole-star ratings are more frequent than half-star ratings.
 
 #### Overcoming Memory Constraints: Genre Analysis
@@ -204,11 +208,12 @@ One of the main technical challenges of this project was the 6 GB RAM limitation
 
 To identify the top genres, we evaluated three different algorithms to balance accuracy and performance:
 
--  Method 1 (Sampling): Taking a 1M row sample for quick estimation.
--  Method 2 (String Detection): Using str_detect for targeted counting.
--  Method 3 (Pre-aggregation): The most efficient approach. By grouping the data by unique genre combinations before expanding them, we reduced the workload from 9 million rows to only ~800 unique strings.
+- Method 1 (Sampling): Taking a 1M row sample for quick estimation.
+- Method 2 (String Detection): Using str_detect for targeted counting.
+- Method 3 (Pre-aggregation): The most efficient approach. By grouping the data by unique genre combinations before expanding them, we reduced the workload from 9 million rows to only \~800 unique strings.
 
 We chose Method 3 for its mathematical identity to the standard approach while maintaining a minimal memory footprint.
+
 ```{r}
 # Optimal Engineering approach (Method 3)
 top_genres_m3 <- edx %>%
@@ -221,12 +226,12 @@ top_genres_m3 <- edx %>%
 
 head(top_genres_m3, 10)
 ```
+
 The analysis confirms that Drama is the most rated genre, followed by Comedy, Action and Thriller.
 
 #### Specific Findings
 
 Finally, we identified the most popular items and the frequency of specific scores to confirm our modeling assumptions.
-
 
 ```{r}
 # Most rated movie
@@ -243,7 +248,6 @@ edx %>%
   arrange(desc(count)) %>%
   head(5)
 ```
-
 
 #### Psychological Bias: Whole vs. Half Stars
 
@@ -262,14 +266,256 @@ edx %>%
   theme_minimal()
 ```
 
+# Advanced Exploratory Data Analysis: Identifying Systemic Biases
+
+The initial inspection confirmed the basic structure of the data, but it also hinted at deeper patterns. To build an accurate recommendation system, we must move beyond simple averages. In this section, we analyze the specific "biases" (systemic variations) that influence how a movie is rated.
+
+These findings directly inform our modeling strategy: for each pattern observed here, a corresponding mathematical component will be integrated into our final algorithm.
+
+## The Movie Effect: Quality Variation
+
+Not all movies are created equal. Some are universally acclaimed, while others are poorly received.
+
+```{r movie-bias-plot, echo=FALSE}
+edx %>% 
+  count(movieId) %>% 
+  ggplot(aes(n)) + 
+  geom_histogram(bins = 30, color = "black", fill = "steelblue") + 
+  scale_x_log10() + 
+  ggtitle("Distribution of Ratings per Movie") +
+  xlab("Number of Ratings") + ylab("Count of Movies")
+```
+  The histogram above shows that while some movies have thousands of ratings, many others have very few. This justifies the inclusion of a **Movie Bias (\b_i)** and highlights the need for **Regularization** to prevent movies with very few ratings from skewing the results.
+  
+## The User Effect: Harsh vs. Generous Graders
+
+Users have different rating scales. A "3" from a very critical user might be equivalent to a "5" from a more lenient one.
+
+```{r user-bias-plot, echo=FALSE}
+edx %>% 
+  group_by(userId) %>% 
+  summarize(b_u = mean(rating)) %>% 
+  ggplot(aes(b_u)) + 
+  geom_histogram(bins = 30, color = "black", fill = "forestgreen") + 
+  ggtitle("Average Rating by User") +
+  xlab("Average Rating") + ylab("Number of Users")
+```
+
+The distribution of average ratings per user confirms a significant **User Effect (\b_u)**. Some users consistently rate below the mean, while others are much more generous.
+
+## Temporal Trends: The Time and Age Effects
+### Weekly Rating Trends
+
+Does the general "mood" of the community change over time? We analyzed the average rating on a weekly basis.
+
+```{r temporal-bias-plot, echo=FALSE}
+edx %>% 
+  group_by(date) %>%
+  summarize(avg_rating = mean(rating)) %>%
+  ggplot(aes(date, avg_rating)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "loess", color = "red") +
+  ggtitle("Average Rating Trends over Time (Weekly)") +
+  xlab("Date") + ylab("Average Rating")
+```
+
+There is a visible, albeit subtle, fluctuation in average ratings over the years. This supports the inclusion of a **Temporal Bias (\b_t)** in our advanced models.
+
+### Movie Age and Release Year
+
+We also investigated if older movies are rated differently than newer ones.
+
+```{r release-year-bias-plot, echo=FALSE}
+edx %>% group_by(release_year) %>%
+  summarize(avg_rating = mean(rating)) %>%
+  ggplot(aes(release_year, avg_rating)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "loess", color = "blue") +
+  ggtitle("Effect of Release Year on Average Rating") +
+  xlab("Release Year") + ylab("Average Rating")
+```
+
+Interestingly, older movies (released before 1980) tend to have higher average ratings, possibly due to a "classic" status or survival bias (only good old movies are still being watched and rated). This confirms the **Release Year Effect (\b_y)**.
+  
+## Additional Explorations and Feature Selection
+
+To ensure the robustness of our model, several other variables were investigated. While these analyses provided valuable insights into user behavior, they were not included in the final model either because they provided redundant information or because their impact on the RMSE was negligible compared to the increased computational complexity.
+
+### User Activity vs. Rating Quality
+We examined whether prolific users (those who rate many movies) tend to be more critical or more generous.
+
+```{r point-activity-quality}
+edx %>% 
+  group_by(userId) %>% 
+  summarize(n = n(), avg = mean(rating)) %>% 
+  ggplot(aes(n, avg)) + 
+  geom_point(alpha = 0.1, color = "darkgrey") + 
+  scale_x_log10() + 
+  geom_smooth(color = "red") +
+  labs(title = "User Activity Level vs. Average Rating",
+       x = "Number of Ratings (Log Scale)", y = "Average Rating")  
+```  
+  
+**Observation:** There is a slight trend where very active users tend to rate closer to the overall mean. However, this effect is largely captured by the User Bias (bu​) already present in our model.  
+  
+### Movie Popularity vs. Rating Average
+
+We tested if "Blockbusters" (highly rated movies) generally receive higher scores.
+
+```{r blockbusters-bias}
+edx %>% 
+  group_by(movieId) %>% 
+  summarize(n = n(), avg = mean(rating)) %>% 
+  ggplot(aes(n, avg)) + 
+  geom_point(alpha = 0.1, color = "darkblue") + 
+  scale_x_log10() + 
+  geom_smooth(color = "orange") +
+  labs(title = "Movie Popularity vs. Average Rating",
+       x = "Number of Ratings (Log Scale)", y = "Average Rating")
+```
+
+**Observation:** Popular movies do tend to have higher averages, but this correlation is implicitly handled by the Movie Bias (bi​). Adding a specific "popularity" variable would introduce multicollinearity.
+
+### Weekday Rating Patterns
+
+We analyzed if the day of the week (Monday to Sunday) influenced the ratings.
+
+```{r weekday-patterns}
+edx %>% 
+  mutate(dow = wday(as_datetime(timestamp), label = TRUE)) %>%
+  group_by(dow) %>% 
+  summarize(avg = mean(rating), n = n()) %>%
+  ggplot(aes(dow, avg)) + 
+  geom_col(fill = "steelblue") + 
+  coord_cartesian(ylim = c(3, 4)) +
+  labs(title = "Average Rating by Day of the Week", x = "Day", y = "Average Rating")
+```
+
+**Observation:** The variation between weekdays and weekends is extremely small (less than 0.05 points). Including this would add complexity for a near-zero gain in RMSE.
+
+### Title Length and Metadata
+
+We checked if the length of the movie title had any impact on the rating.
+  
+```{r title-length-bias}
+edx %>% 
+  mutate(title_len = nchar(title)) %>%
+  group_by(title_len) %>% 
+  summarize(avg = mean(rating)) %>%
+  ggplot(aes(title_len, avg)) + 
+  geom_line(color = "darkgreen") +
+  labs(title = "Title Length vs. Average Rating", x = "Number of Characters", y = "Average Rating")
+```
+**Observation:** No meaningful pattern was found. Title length is an arbitrary metadata point with no predictive power for user preference.
+
+### Multi-Genre Complexity
+
+We explored if movies belonging to multiple genres were rated differently than single-genre movies.
+
+```{r multi-genre-bias}
+edx %>% 
+  mutate(n_genres = str_count(genres, "\\|") + 1) %>%
+  group_by(n_genres) %>% 
+  summarize(avg = mean(rating)) %>%
+  ggplot(aes(n_genres, avg)) + 
+  geom_line() + geom_point() +
+  labs(title = "Number of Genres vs. Average Rating", x = "Genre Count", y = "Average Rating")
+```
+**Observation:** While there's a slight increase in rating for movies with 2-3 genres, the computational cost of decomposing every genre combination for 10 million rows exceeded our 6 GB RAM constraints during the regularization process.
+
+### Summary of Excluded Variables
+|    Variable    |               Reason of exclusion                |
+|:-------------- |:------------------------------------------------:|
+| Weekday        | Negligible impact on RMSE.                       |
+| Title Length   | No statistical correlation.                      |
+| User Activity  | Already captured by \b_u.                          |
+| Popularity     | Already captured by \b_i.                          |
+| Multi-genre    | Computational complexity vs. Memory constraints. |
+
+By focusing only on the most significant predictors (Movie, User, Year, and Time), we maintain a **parsimonious model** that is both efficient and highly accurate.
+
+
+# Modeling Results and Evolution
+
+To achieve our target RMSE (< 0.86490), we adopted an incremental approach. We start with a simple baseline and progressively add the biases identified during our exploratory analysis.
+
+## Evaluation Metric: RMSE
+The performance is evaluated using the Root Mean Square Error (RMSE), defined as:
+$$RMSE = \sqrt{\frac{1}{N} \sum_{u,i} (\hat{y}_{u,i} - y_{u,i})^2}$$
+Where $y_{u,i}$ is the actual rating and $\hat{y}_{u,i}$ is our prediction.
+
+## From Baseline to Complexity
+We evaluated seven successive models:
+
+### Model 1: The Global Average ($\mu$).
+The simplest possible model assumes the same rating for all movies and all users:
+$$Y_{u,i} = \mu + \epsilon_{u,i}$$
+
+```{r model-1}
+mu <- mean(edx$rating)
+rmse_model_1 <- RMSE(final_holdout_test$rating, mu)
+results <- data.frame(Method = "Model 1: Global Average", RMSE = rmse_model_1)
+```
+
+### Model 2: Adding Movie Effect ($b_i$).
+to do...
+
+### Model 3: Adding User Effect ($b_u$).
+to do...
+
+### Model 4: Adding Genre Effect ($b_g$).
+to do...
+
+### Model 5: Adding Release Year Effect ($b_y$).
+to do...
+
+### Model 6: Adding Temporal Effect ($b_t$).
+to do...
+
+### Model 7: The Final Model with Regularization and Backfitting
+
+This is our most advanced model. It addresses the issues of small sample sizes and computational efficiency through two combined techniques.
+
+#### The Regularized Equation
+To predict a rating, we use the following multi-factor linear equation:
+$$\hat{y}_{u,i} = \mu + b_i(\lambda) + b_u(\lambda) + b_y(\lambda) + b_t(\lambda) + \epsilon_{u,i}$$
+
+Where:
+- $\mu$: The global average.
+- $b_i, b_u, b_y, b_t$: The bias terms for movie, user, release year, and time respectively.
+- $\lambda$: The regularization penalty (tuning parameter).
+
+#### Why Regularization?
+During our EDA, we observed that some movies and users have very few ratings. A movie with a single 5-star rating shouldn't be ranked higher than a classic with thousands of 4.5-star ratings. **Regularization** introduces the penalty term $\lambda$ that shrinks these small-sample biases toward zero, ensuring that we only trust "extreme" ratings if they are supported by a large number of observations.
+
+#### Why Backfitting?
+With 10 million rows and four different bias terms ($b_i, b_u, b_y, b_t$), calculating all parameters simultaneously would require a massive matrix inversion, leading to immediate memory exhaustion on our 6 GB RAM VM. 
+
+The **Backfitting algorithm** is our solution for memory efficiency. It is an iterative process that updates one bias at a time while keeping the others fixed. This ensures stability and allows the model to converge toward the optimal solution without overloading the system.
+
+#### Technical Implementation of the Backfitting Loop
+For each iteration, the algorithm performs the following sequence:
+
+1.  **Update Movie Bias ($b_i$):** Calculate residuals by subtracting $\mu$ and current estimates of $b_u, b_y, b_t$ from the actual ratings. Apply $\lambda$ to regularize the result.
+2.  **Update User Bias ($b_u$):** Calculate the average residual after removing $\mu, b_i, b_y,$ and $b_t$, and update the user effect.
+3.  **Update Year and Temporal Biases ($b_y, b_t$):** Successively update these terms using the same residual logic.
+
+This cycle repeats until the RMSE stabilizes (convergence).
+
+#### Tuning the Penalty Parameter ($\lambda$)
+Because the optimal value of $\lambda$ depends on the data, we use cross-validation on the `edx` dataset. We test a range of values and select the one that minimizes the RMSE. This $\lambda$ is then used in our final Backfitting loop to produce the final predictions.
+
+
+
+# OLD STUFF - on garde pour vérifier ultérieurement si intéret
 ## Exploratory Data Analysis (EDA)
+
 Before building the model, we must understand the "signals" in our data.
-
-
 
 ### The User Effect
 
 Some users are critical, while others are generous. Some have rated hundreds of movies, while others have rated only a few.
+
 ```{r user-effect, echo=FALSE}
 edx %>% count(userId) %>% 
   ggplot(aes(n)) + 
@@ -278,11 +524,13 @@ edx %>% count(userId) %>%
   ggtitle("User Activity Level") +
   xlab("Number of Ratings (Log scale)") + ylab("Number of Users")
 ```
+
 This diversity is why we need Regularization. If a user has only rated one movie, we shouldn't trust their "bias" as much as a user who has rated five hundred. Regularization "penalizes" estimates based on small sample sizes to prevent errors.
 
 ### The Movie Release Year Effect
 
 Does the age of a movie affect its rating?
+
 ```{r release-year-effet, echo=FALSE}
 edx %>% group_by(release_year) %>%
   summarize(avg_rating = mean(rating)) %>%
@@ -292,7 +540,5 @@ edx %>% group_by(release_year) %>%
   ggtitle("Average Rating by Release Year : effect of the year of release on the average rating") +
   xlab("Release Year") + ylab("Average Rating")
 ```
+
 We observe that older movies (classics) tend to have higher average ratings than modern ones. This confirms that the Release Year is a significant predictor to include in our model.
-
-```
-
