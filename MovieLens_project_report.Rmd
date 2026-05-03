@@ -454,7 +454,42 @@ To achieve our target RMSE (\< 0.86490), we adopted an incremental approach. We 
 
 ## Evaluation Metric: RMSE
 
-The performance is evaluated using the Root Mean Square Error (RMSE), defined as: $$RMSE = \sqrt{\frac{1}{N} \sum_{u,i} (\hat{y}_{u,i} - y_{u,i})^2}$$ Where $y_{u,i}$ is the actual rating and $\hat{y}_{u,i}$ is our prediction.
+The performance of our models is evaluated using the **Root Mean Square Error (RMSE)**. This metric quantifies the typical distance between the predicted rating and the actual rating.
+
+The mathematical formula is:
+$$RMSE = \sqrt{\frac{1}{N} \sum_{u,i}^{} (\hat{y}_{u,i} - y_{u,i})^2}$$
+
+Where:
+* $N$ is the number of user/movie combinations.
+* $y_{u,i}$ is the actual rating.
+* $\hat{y}_{u,i}$ is the predicted rating.
+
+### Why RMSE?
+Beyond the project requirements, RMSE is the industry standard for recommendation systems for several reasons:
+
+1.  **Penalty for Large Errors**: By squaring the differences, RMSE penalizes large outliers more heavily than small ones. In a recommendation context, it is better to be slightly off on many ratings than to be significantly wrong on a few.
+2.  **Magnitude over Binary Logic**: Unlike binary accuracy, RMSE accounts for the magnitude of the error.
+3.  **Statistical Robustness**: It provides a smooth, differentiable surface that is ideal for the optimization (Fine-tuning) of our regularization parameters ($\lambda$).
+
+### Comparison with Other Metrics
+To better understand the focus of our evaluation, it is useful to compare RMSE with alternative metrics:
+
+**1. RMSE vs. MAE (Mean Absolute Error)**
+The formula for MAE is:
+$$MAE = \frac{1}{N} \sum_{u,i}^{} | \hat{y}_{u,i} - y_{u,i} |$$
+* **Difference**: Unlike MAE, which treats all errors linearly, RMSE squares the residuals. This makes it more sensitive to outliers. A single prediction off by 3 stars is considered much worse than three predictions off by 1 star. This aligns with user trust: a "terrible" recommendation (predicting 5 for a 1-star movie) is more damaging than several "slightly off" ones.
+
+**2. RMSE vs. Classification Accuracy**
+The formula for Accuracy (after rounding predictions to the nearest 0.5) is:
+$$Accuracy = \frac{1}{N} \sum_{u,i}^{} \mathbb{1}(\text{round}(\hat{y}_{u,i}) = y_{u,i})$$
+* **Difference**: Accuracy is binary ($0$ or $1$). It does not account for how close a prediction was to the truth. For a 5-star scale, predicting $3.9$ for a $4.0$ rating is a "good" result in RMSE, whereas it would be a "fail" in simple accuracy.
+
+**3. Ranking Metrics (nDCG and Precision@K)**
+In real-world production systems (like Netflix), the focus often shifts from predicting the exact rating to the quality of the "Top 10" list. 
+* **Precision at K**: $P@k = \frac{\text{Relevant items in Top K}}{K}$
+* **nDCG (Normalized Discounted Cumulative Gain)**: 
+$$nDCG_p = \frac{DCG_p}{IDCG_p} \text{ where } DCG_p = \sum_{i=1}^{p} \frac{2^{rel_i} - 1}{\log_2(i+1)}$$
+* **Difference**: These metrics evaluate the *order* of suggestions. Although out of scope for this project's technical constraints (6 GB RAM), they would be the logical next step for a commercial deployment where the ranking of the list matters more than the point prediction.
 
 ## From Baseline to Complexity
 
@@ -1035,6 +1070,8 @@ While the current model performs well, several areas for improvement remain:
 1.  **Matrix Factorization**: Although our bias-based model is efficient, advanced techniques like SVD (Singular Value Decomposition) or ALS (Alternating Least Squares) could capture deeper latent patterns in user-movie interactions that simple additive biases cannot.
 2.  **Computational Constraints**: The analysis was strictly performed under a 6 GB RAM constraint. With more computational resources, we could implement more complex ensemble methods or deep learning architectures (like Neural Collaborative Filtering).
 3.  **Cold Start Problem**: The model still struggles with new users or movies with no prior history. Integrating metadata (like movie plot summaries or user demographics) could help mitigate this.
+
+As discussed in the evaluation section, while our model achieved the target RMSE, future iterations could focus on optimizing for ranking metrics like nDCG to better reflect real-world user satisfaction beyond point-prediction accuracy.
 
 In conclusion, this project demonstrates that a carefully tuned linear model with regularization and feature engineering can achieve high precision, providing a solid foundation for more advanced recommendation engines.
 
