@@ -8,6 +8,9 @@ output:
     toc_depth: 3
     number_sections: true
     highlight: tango
+header-includes:
+   - \usepackage{fvextra}
+   - \DefineVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\},breaklines,breakanywhere}
 ---
 
 ```{r setup, include=FALSE}
@@ -18,6 +21,8 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.align =
 library(tidyverse)
 library(caret)
 library(lubridate)
+library(knitr)
+library(kableExtra)
 ```
 
 # Introduction
@@ -110,30 +115,7 @@ edx <- rbind(edx, removed)
 rm(dl, ratings, movies, test_index, temp, movielens, removed)
 ```
 
-### Feature Engineering
-
-To move beyond a simple average, we extracted two key temporal variables from the raw data:
-
-- **Release Year**: Extracted from the movie title to see if "classics" are rated differently than modern blockbusters.
-
-- **Review Week (Date)**: Extracted from the timestamp to capture trends in rating behavior over time.
-
-Before proceeding with the exploratory analysis, we transform the raw data to extract specific features. This step is essential because our final modeling strategy (detailed in Section 4) will move beyond simple averages to incorporate temporal and movie-age effects. By extracting the release year from the titles and converting the timestamps into weekly dates at this stage, we can visualize these trends before formally integrating them into our regularized model.
-
-```{r feature-engineering, cache=TRUE}
-# Extracting release year and converting timestamp to weekly dates
-# This ensures that these columns are available for both EDA and modeling
-
-edx <- edx %>%
-  mutate(release_year = as.numeric(str_extract(str_extract(title, "\\(\\d{4}\\)$"), "\\d{4}")),
-         date = round_date(as_datetime(timestamp), unit = "week"))
-
-final_holdout_test <- final_holdout_test %>%
-  mutate(release_year = as.numeric(str_extract(str_extract(title, "\\(\\d{4}\\)$"), "\\d{4}")),
-         date = round_date(as_datetime(timestamp), unit = "week"))
-```
-
-### Data Inspection & Computational Optimization
+## Data Inspection & Computational Optimization
 
 Before building the model, we performed a rigorous inspection of the `edx` dataset to validate its structure and content. This initial exploration validates the data structure and answers the project's fundamental questions through direct code execution.
 
@@ -149,7 +131,7 @@ Before building the model, we performed a rigorous inspection of the `edx` datas
 > - **Rating Frequency**: The five most common ratings are, in order: **4, 3, 5, 3.5, and 2**.
 > - **Rating Type Bias**: As observed, half-star ratings are significantly less common than whole-star ratings, suggesting a psychological preference for integer scores.
 
-#### Dataset Dimensions and Basic Statistics
+### Dataset Dimensions and Basic Statistics
 
 We first verified the volume of data and the range of ratings.
 
@@ -181,14 +163,14 @@ message(paste("Number of 3 ratings:", count_3))
 
 The inspection of the `edx` dataset reveals a massive volume of data, consisting of **`r format(res_dim[1], big.mark=",")`** rows and **`r res_dim[2]`** columns.
 
-Among these records, we identify: 
+Among these records, we identify:
 
-- **`r format(n_unique_users, big.mark=",")`** unique users. 
+- **`r format(n_unique_users, big.mark=",")`** unique users.
 - **`r format(n_unique_movies, big.mark=",")`** unique movies.
 
 Regarding the rating values, we confirmed the integrity of the scale: there are **`r count_0`** ratings of zero (as expected for a 0.5 to 5.0 scale), while the score of 3 appears **`r format(count_3, big.mark=",")`** times.
 
-#### Visualizing the Rating Distribution
+### Visualizing the Rating Distribution
 
 The following visualization helps determine if users tend to be generous or strict, and highlights the preference for specific types of scores.
 
@@ -205,7 +187,7 @@ edx %>% ggplot(aes(rating)) +
 
 The histogram reveals a "positivity bias," with most ratings above 3. Furthermore, we can clearly see that whole-star ratings are more frequent than half-star ratings.
 
-#### Overcoming Memory Constraints: Genre Analysis
+### Overcoming Memory Constraints: Genre Analysis
 
 One of the main technical challenges of this project was the 6 GB RAM limitation of the Virtual Machine. A standard Tidyverse approach to count genres (using separate_rows() on 9 million rows) causes system instability due to memory exhaustion.
 
@@ -232,7 +214,7 @@ head(top_genres_m3, 10)
 
 The analysis confirms that Drama is the most rated genre, followed by Comedy, Action and Thriller.
 
-#### Specific Findings
+### Specific Findings
 
 Finally, we identified the most popular items and the frequency of specific scores to confirm our modeling assumptions.
 
@@ -252,7 +234,7 @@ edx %>%
   head(5)
 ```
 
-#### Psychological Bias: Whole vs. Half Stars
+### Psychological Bias: Whole vs. Half Stars
 
 The visualization below reinforces the observation that users have a psychological preference for integer ratings.
 
@@ -267,6 +249,29 @@ edx %>%
        subtitle = "Comparison: Whole stars vs Half stars",
        x = "Rating", y = "Count", fill = "Type") +
   theme_minimal()
+```
+
+## Feature Engineering
+
+To move beyond a simple average, we extracted two key temporal variables from the raw data:
+
+- **Release Year**: Extracted from the movie title to see if "classics" are rated differently than modern blockbusters.
+
+- **Review Week (Date)**: Extracted from the timestamp to capture trends in rating behavior over time.
+
+Before proceeding with the exploratory analysis, we transform the raw data to extract specific features. This step is essential because our final modeling strategy (detailed in Section 4) will move beyond simple averages to incorporate temporal and movie-age effects. By extracting the release year from the titles and converting the timestamps into weekly dates at this stage, we can visualize these trends before formally integrating them into our regularized model.
+
+```{r feature-engineering, cache=TRUE}
+# Extracting release year and converting timestamp to weekly dates
+# This ensures that these columns are available for both EDA and modeling
+
+edx <- edx %>%
+  mutate(release_year = as.numeric(str_extract(str_extract(title, "\\(\\d{4}\\)$"), "\\d{4}")),
+         date = round_date(as_datetime(timestamp), unit = "week"))
+
+final_holdout_test <- final_holdout_test %>%
+  mutate(release_year = as.numeric(str_extract(str_extract(title, "\\(\\d{4}\\)$"), "\\d{4}")),
+         date = round_date(as_datetime(timestamp), unit = "week"))
 ```
 
 # Advanced Exploratory Data Analysis: Identifying Systemic Biases
@@ -288,8 +293,9 @@ edx %>%
   ggtitle("Distribution of Ratings per Movie") +
   xlab("Number of Ratings") + ylab("Count of Movies")
 ```
-  The histogram above shows that while some movies have thousands of ratings, many others have very few. This justifies the inclusion of a **Movie Bias (\b_i)** and highlights the need for **Regularization** to prevent movies with very few ratings from skewing the results.
-  
+
+The histogram above shows that while some movies have thousands of ratings, many others have very few. This justifies the inclusion of a **Movie Bias ($b_i$)** and highlights the need for **Regularization** to prevent movies with very few ratings from skewing the results.
+
 ## The User Effect: Harsh vs. Generous Graders
 
 Users have different rating scales. A "3" from a very critical user might be equivalent to a "5" from a more lenient one.
@@ -304,9 +310,10 @@ edx %>%
   xlab("Average Rating") + ylab("Number of Users")
 ```
 
-The distribution of average ratings per user confirms a significant **User Effect ($b_u$)**. Some users consistently rate below the mean, while others are much more generous.
+The distribution of average ratings per user confirms a significant **User Effect (**$b_u$). Some users consistently rate below the mean, while others are much more generous.
 
 ## Temporal Trends: The Time and Age Effects
+
 ### Weekly Rating Trends
 
 Does the general "mood" of the community change over time? We analyzed the average rating on a weekly basis.
@@ -322,7 +329,7 @@ edx %>%
   xlab("Date") + ylab("Average Rating")
 ```
 
-There is a visible, albeit subtle, fluctuation in average ratings over the years. This supports the inclusion of a **Temporal Bias ($b_t$)** in our advanced models.
+There is a visible, albeit subtle, fluctuation in average ratings over the years. This supports the inclusion of a **Temporal Bias (**$b_t$) in our advanced models.
 
 ### Movie Age and Release Year
 
@@ -338,13 +345,14 @@ edx %>% group_by(release_year) %>%
   xlab("Release Year") + ylab("Average Rating")
 ```
 
-Interestingly, older movies (released before 1980) tend to have higher average ratings, possibly due to a "classic" status or survival bias (only good old movies are still being watched and rated). This confirms the **Release Year Effect ($b_y$)**.
-  
+Interestingly, older movies (released before 1980) tend to have higher average ratings, possibly due to a "classic" status or survival bias (only good old movies are still being watched and rated). This confirms the **Release Year Effect (**$b_y$).
+
 ## Additional Explorations and Feature Selection
 
 To ensure the robustness of our model, several other variables were investigated. While these analyses provided valuable insights into user behavior, they were not included in the final model either because they provided redundant information or because their impact on the RMSE was negligible compared to the increased computational complexity.
 
 ### User Activity vs. Rating Quality
+
 We examined whether prolific users (those who rate many movies) tend to be more critical or more generous.
 
 ```{r point-activity-quality}
@@ -357,10 +365,10 @@ edx %>%
   geom_smooth(color = "red") +
   labs(title = "User Activity Level vs. Average Rating",
        x = "Number of Ratings (Log Scale)", y = "Average Rating")  
-```  
-  
-**Observation:** There is a slight trend where very active users tend to rate closer to the overall mean. However, this effect is largely captured by the User Bias (bu​) already present in our model.  
-  
+```
+
+**Observation:** There is a slight trend where very active users tend to rate closer to the overall mean. However, this effect is largely captured by the User Bias (bu​) already present in our model.
+
 ### Movie Popularity vs. Rating Average
 
 We tested if "Blockbusters" (highly rated movies) generally receive higher scores.
@@ -399,7 +407,7 @@ edx %>%
 ### Title Length and Metadata
 
 We checked if the length of the movie title had any impact on the rating.
-  
+
 ```{r title-length-bias}
 edx %>% 
   mutate(title_len = nchar(title)) %>%
@@ -409,6 +417,7 @@ edx %>%
   geom_line(color = "darkgreen") +
   labs(title = "Title Length vs. Average Rating", x = "Number of Characters", y = "Average Rating")
 ```
+
 **Observation:** No meaningful pattern was found. Title length is an arbitrary metadata point with no predictive power for user preference.
 
 ### Multi-Genre Complexity
@@ -424,39 +433,40 @@ edx %>%
   geom_line() + geom_point() +
   labs(title = "Number of Genres vs. Average Rating", x = "Genre Count", y = "Average Rating")
 ```
+
 **Observation:** While there's a slight increase in rating for movies with 2-3 genres, the computational cost of decomposing every genre combination for 10 million rows exceeded our 6 GB RAM constraints during the regularization process.
 
 ### Summary of Excluded Variables
-|    Variable    |               Reason of exclusion                |
-|:-------------- |:------------------------------------------------:|
-| Weekday        | Negligible impact on RMSE.                       |
-| Title Length   | No statistical correlation.                      |
-| User Activity  | Already captured by \b_u.                          |
-| Popularity     | Already captured by \b_i.                          |
-| Multi-genre    | Computational complexity vs. Memory constraints. |
+
+| Variable      |               Reason of exclusion                |
+|:--------------|:------------------------------------------------:|
+| Weekday       |            Negligible impact on RMSE.            |
+| Title Length  |           No statistical correlation.            |
+| User Activity |            Already captured by \b\_u.            |
+| Popularity    |            Already captured by \b\_i.            |
+| Multi-genre   | Computational complexity vs. Memory constraints. |
 
 By focusing only on the most significant predictors (Movie, User, Year, and Time), we maintain a **parsimonious model** that is both efficient and highly accurate.
 
-
 # Modeling Results and Evolution
 
-To achieve our target RMSE (< 0.86490), we adopted an incremental approach. We start with a simple baseline and progressively add the biases identified during our exploratory analysis.
+To achieve our target RMSE (\< 0.86490), we adopted an incremental approach. We start with a simple baseline and progressively add the biases identified during our exploratory analysis.
 
 ## Evaluation Metric: RMSE
-The performance is evaluated using the Root Mean Square Error (RMSE), defined as:
-$$RMSE = \sqrt{\frac{1}{N} \sum_{u,i} (\hat{y}_{u,i} - y_{u,i})^2}$$
-Where $y_{u,i}$ is the actual rating and $\hat{y}_{u,i}$ is our prediction.
+
+The performance is evaluated using the Root Mean Square Error (RMSE), defined as: $$RMSE = \sqrt{\frac{1}{N} \sum_{u,i} (\hat{y}_{u,i} - y_{u,i})^2}$$ Where $y_{u,i}$ is the actual rating and $\hat{y}_{u,i}$ is our prediction.
 
 ## From Baseline to Complexity
+
 ### Data Partitioning for Model Development
 
 To avoid over-fitting and to ensure that our model generalizes well to unseen data, we do not train our algorithms on the entire `edx` dataset. Instead, we perform an additional split to create a **training set** and a **test set**.
 
 This "refresh" step is fundamental for the following reasons:
 
--  **Parameter Tuning**: It allows us to find the optimal penalty term ($\lambda$) using only the training data.
--  **Validation**: We can compare the performance of Models 1 through 7 on the test set before making a final decision.
--  **Integrity**: The `final_holdout_test` remains strictly isolated, used only once for the ultimate performance report.
+- **Parameter Tuning**: It allows us to find the optimal penalty term ($\lambda$) using only the training data.
+- **Validation**: We can compare the performance of Models 1 through 7 on the test set before making a final decision.
+- **Integrity**: The `final_holdout_test` remains strictly isolated, used only once for the ultimate performance report.
 
 ```{r train-test-split, cache=TRUE}
 # Partitioning edx into training and test sets (80% / 20%)
@@ -481,29 +491,25 @@ To achieve our target RMSE, we adopted an incremental approach, building complex
 
 We evaluated seven successive models, starting from a simple baseline and ending with a high-performance regularized algorithm:
 
-1.  **Model 1: Global Average ($\mu$)** - The simplest possible baseline.
-2.  **Model 2: Movie Effect ($b_i$)** - Accounting for the fact that some movies are better than others.
-3.  **Model 3: User Effect ($b_u$)** - Adjusting for users who are generally more critical or generous.
-4.  **Model 4: Genre Effect ($b_g$)** - Incorporating the specific bias associated with movie genres.
-5.  **Model 5: Release Year Effect ($b_y$)** - Factoring in the impact of a movie's age.
-6.  **Model 6: Temporal Effect ($b_t$)** - Capture changes in rating trends over time.
+1.  **Model 1: Global Average (**$\mu$) - The simplest possible baseline.
+2.  **Model 2: Movie Effect (**$b_i$) - Accounting for the fact that some movies are better than others.
+3.  **Model 3: User Effect (**$b_u$) - Adjusting for users who are generally more critical or generous.
+4.  **Model 4: Genre Effect (**$b_g$) - Incorporating the specific bias associated with movie genres.
+5.  **Model 5: Release Year Effect (**$b_y$) - Factoring in the impact of a movie's age.
+6.  **Model 6: Temporal Effect (**$b_t$) - Capture changes in rating trends over time.
 7.  **Model 7: Regularization & Backfitting** - Our final model, which penalizes small sample sizes and optimizes all biases iteratively.
 
 This progression demonstrates how we systematically reduced the RMSE to meet the project's requirements.
 
-
 ### Model 1: The Global Average ($\mu$).
+
 The baseline model is the simplest possible approach to recommendation. It ignores all differences between users and movies, assuming that every rating is simply the average of all observed ratings plus some random variation:
 
 $$Y_{u,i} = \mu + \epsilon_{u,i}$$
 
-In this equation:
-- $\mu$ represents the "true" average rating across all movies and users.
-- $\epsilon_{u,i}$ represents the independent errors centered at zero.
+In this equation: - $\mu$ represents the "true" average rating across all movies and users. - $\epsilon_{u,i}$ represents the independent errors centered at zero.
 
 The estimate that minimizes the RMSE is the least squares estimate of $\mu$, which is the average of all ratings in the training set (`edx`).
-
-
 
 ```{r model-1, cache=TRUE}
 mu_hat <- mean(train_set$rating)
@@ -520,6 +526,7 @@ print(rmse_results)
 **Observation:** With an RMSE of `r round(naive_rmse, 5)`, this model is far from our target. It confirms that a simple average is insufficient to capture the complexity of user preferences and it does not account for the fact that some movies are better than others, or that some users are more critical. It serves as our reference point; any subsequent model must significantly outperform this baseline.
 
 ### Model 2: Adding Movie Effect ($b_i$).
+
 To improve our baseline, we introduce the **Movie Effect**. Our exploratory analysis showed that ratings vary significantly from one movie to another. We represent this bias as $b_i$, which is the average of the residuals (the difference between the actual rating and the global mean) for each movie $i$:
 
 $$Y_{u,i} = \mu + b_i + \epsilon_{u,i}$$
@@ -583,14 +590,14 @@ rmse_results <- rbind(rmse_results,
 # Display the progress
 print(rmse_results)
 ```
+
 **Observation:** Incorporating the user effect leads to a massive reduction in RMSE, reaching r round(model_3_rmse, 5). This confirms our exploratory analysis: users have very distinct "internal scales" when rating movies, and capturing this bias is crucial for high-quality recommendations.
 
-
 ### Model 4: Adding Genre Effect ($b_g$).
+
 The previous models showed that movie and user effects are powerful predictors. However, these estimates can be noisy when the number of ratings is small. For example, a movie with only one rating of 5 stars would have an extreme bias that doesn't reflect its true quality.
 
 To address this, we implement **Regularization**. This technique penalizes large estimates coming from small sample sizes by adding a penalty term $\lambda$ (lambda) to the denominator that shrinks the movie ($b_i$) and user ($b_u$) biases toward zero when the number of ratings is low. We use cross-validation on our `train_set` to find the optimal $\lambda$ that minimizes the RMSE.
-
 
 ```{r model-4-regularization}
 # Define a range of lambdas to test
@@ -638,15 +645,14 @@ ggplot(data.frame(lambdas = lambdas, rmses = rmses), aes(x = lambdas, y = rmses)
        x = "Lambda",
        y = "RMSE")
 ```
+
 ***Observation:*** The cross-validation identifies `r best_lambda` as the optimal penalty. This regularization provides a more robust model, achieving an RMSE of `r round(min_rmse_model4, 5)`. This step is crucial before adding more features to the model.
 
-
 ### Model 5: Adding Release Year Effect ($b_y$).
-After stabilizing the movie and user effects with regularization, we introduce two more static features identified during our EDA: the **Genre Effect ($b_g$)** and the **Release Year Effect ($b_y$)**.
-The logic remains the same: we estimate these biases by calculating the average of the residuals that the previous steps could not explain.
 
-The expanded model equation becomes:
-$$Y_{u,i,g,y} = \mu + b_i + b_u + b_g + b_y + \epsilon_{u,i,g,y}$$
+After stabilizing the movie and user effects with regularization, we introduce two more static features identified during our EDA: the **Genre Effect (**$b_g$) and the **Release Year Effect (**$b_y$). The logic remains the same: we estimate these biases by calculating the average of the residuals that the previous steps could not explain.
+
+The expanded model equation becomes: $$Y_{u,i,g,y} = \mu + b_i + b_u + b_g + b_y + \epsilon_{u,i,g,y}$$
 
 Using the optimal $\lambda$ found in the previous step, we calculate these biases sequentially on the residuals of the model.
 
@@ -701,6 +707,7 @@ rmse_results <- rbind(rmse_results,
 # Display the results
 print(rmse_results)
 ```
+
 **Observation:** Adding these secondary effects allows for a more granular prediction. The RMSE has improved to `r round(model_5_rmse, 5)`. Even if the individual gain from each effect is smaller than the user effect, their cumulative impact is essential to move closer to our goal.
 
 ### Model 6: Adding Temporal Effect ($b_t$).
@@ -708,11 +715,20 @@ print(rmse_results)
 The final bias we consider before the ultimate refinement is the **Temporal Effect**. Our EDA suggested that movie ratings are not static and can fluctuate over time due to trends or changes in the platform's user base.
 
 We define $b_t$ as the average residual for each specific rating date, calculated after accounting for movie, user, genre, and release year effects. To capture this without exceeding memory limits (keeping the 6 GB RAM constraint in mind), we avoid external packages like plyr. Instead, we use a basic mathematical formula to group timestamps into weekly bins (604,800 seconds).
-**The equation now accounts for the time bias $b_t$:**
+
+**The equation now accounts for the time bias** $b_t$:
 
 $$Y_{u,i,g,y,t} = \mu + b_i + b_u + b_g + b_y + b_t + \epsilon_{u,i,g,y,t}$$
 
 ```{r model-6-temporal-effect}
+
+# Feature engineering without external packages
+train_set <- train_set %>% 
+  mutate(date = floor(timestamp / 604800) * 604800)
+
+test_set <- test_set %>% 
+  mutate(date = floor(timestamp / 604800) * 604800)
+
 # Using the optimal lambda
 l <- best_lambda
 
@@ -749,47 +765,281 @@ rmse_results <- rbind(rmse_results,
 # Display the progress
 print(rmse_results)
 ```
+
 **Observation:** The inclusion of the temporal bias $b_t$ further refines the model, bringing the RMSE down to `r round(model_6_rmse, 5)`. Although the gain from the time effect is more subtle than the user or movie effects, it captures the evolving nature of ratings, which is a key component of modern recommendation engines.
-
-
-
 
 ### Model 7: The Final Model with Regularization and Backfitting
 
-This is our most advanced model. It addresses the issues of small sample sizes and computational efficiency through two combined techniques.
+This is our most advanced model. It addresses the issues of small sample sizes and computational efficiency through two combined techniques : regularisation (already included in Model 4) and backfitting.
+
+The final step of our modeling process involves a "Backfitting" approach. Instead of simply adding effects, we ensure each bias ($b_i, b_u, b_g, b_y, b_t$) is estimated by accounting for all the previously estimated effects. This ensures a more precise isolation of each factor. This iterative refinement allows the biases to account for each other, leading to more stable estimates.
+
+We also implement a "capping" strategy: since ratings in the MovieLens dataset are strictly between 0.5 and 5, any prediction falling outside this range is truncated to the nearest boundary.
+
+To maximize precision, we also perform a fine-tuned cross-validation for $\lambda$ between 3.5 and 5.5.
 
 #### The Regularized Equation
-To predict a rating, we use the following multi-factor linear equation:
-$$\hat{y}_{u,i} = \mu + b_i(\lambda) + b_u(\lambda) + b_y(\lambda) + b_t(\lambda) + \epsilon_{u,i}$$
 
-Where:
-- $\mu$: The global average.
-- $b_i, b_u, b_y, b_t$: The bias terms for movie, user, release year, and time respectively.
-- $\lambda$: The regularization penalty (tuning parameter).
+To predict a rating, we use the following multi-factor linear equation: $$\hat{y}_{u,i} = \mu + b_i(\lambda) + b_u(\lambda) + b_y(\lambda) + b_t(\lambda) + \epsilon_{u,i}$$
+
+Where: - $\mu$: The global average. - $b_i, b_u, b_y, b_t$: The bias terms for movie, user, release year, and time respectively. - $\lambda$: The regularization penalty (tuning parameter).
 
 #### Why Regularization?
+
 During our EDA, we observed that some movies and users have very few ratings. A movie with a single 5-star rating shouldn't be ranked higher than a classic with thousands of 4.5-star ratings. **Regularization** introduces the penalty term $\lambda$ that shrinks these small-sample biases toward zero, ensuring that we only trust "extreme" ratings if they are supported by a large number of observations.
 
 #### Why Backfitting?
-With 10 million rows and four different bias terms ($b_i, b_u, b_y, b_t$), calculating all parameters simultaneously would require a massive matrix inversion, leading to immediate memory exhaustion on our 6 GB RAM VM. 
+
+With 10 million rows and four different bias terms ($b_i, b_u, b_y, b_t$), calculating all parameters simultaneously would require a massive matrix inversion, leading to immediate memory exhaustion on our 6 GB RAM VM.
 
 The **Backfitting algorithm** is our solution for memory efficiency. It is an iterative process that updates one bias at a time while keeping the others fixed. This ensures stability and allows the model to converge toward the optimal solution without overloading the system.
 
 #### Technical Implementation of the Backfitting Loop
+
 For each iteration, the algorithm performs the following sequence:
 
-1.  **Update Movie Bias ($b_i$):** Calculate residuals by subtracting $\mu$ and current estimates of $b_u, b_y, b_t$ from the actual ratings. Apply $\lambda$ to regularize the result.
-2.  **Update User Bias ($b_u$):** Calculate the average residual after removing $\mu, b_i, b_y,$ and $b_t$, and update the user effect.
-3.  **Update Year and Temporal Biases ($b_y, b_t$):** Successively update these terms using the same residual logic.
+1.  **Update Movie Bias (**$b_i$): Calculate residuals by subtracting $\mu$ and current estimates of $b_u, b_y, b_t$ from the actual ratings. Apply $\lambda$ to regularize the result.
+2.  **Update User Bias (**$b_u$): Calculate the average residual after removing $\mu, b_i, b_y,$ and $b_t$, and update the user effect.
+3.  **Update Year and Temporal Biases (**$b_y, b_t$): Successively update these terms using the same residual logic.
 
 This cycle repeats until the RMSE stabilizes (convergence).
 
 #### Tuning the Penalty Parameter ($\lambda$)
+
 Because the optimal value of $\lambda$ depends on the data, we use cross-validation on the `edx` dataset. We test a range of values and select the one that minimizes the RMSE. This $\lambda$ is then used in our final Backfitting loop to produce the final predictions.
 
+```{r model-7-backfitting}
+# 1. Aligning global mean variable
+mu <- mu_hat
 
+# 2. Fine-tuning range for Lambda
+lambdas_finetune <- seq(3.5, 5.5, 0.25)
+
+rmses_model7 <- sapply(lambdas_finetune, function(l){
+  
+  # PASS 1: Initial estimates
+  b_i_temp <- train_set %>% 
+    group_by(movieId) %>% 
+    summarize(b_i = sum(rating - mu)/(n()+l))
+  
+  b_u <- train_set %>% 
+    left_join(b_i_temp, by="movieId") %>% 
+    group_by(userId) %>% 
+    summarize(b_u = sum(rating - mu - b_i)/(n()+l))
+  
+  # PASS 2: Refinement (Backfitting)
+  # We recalculate b_i based on the newly estimated b_u
+  b_i <- train_set %>% 
+    left_join(b_u, by="userId") %>% 
+    group_by(movieId) %>% 
+    summarize(b_i = sum(rating - mu - b_u)/(n()+l))
+  
+  # Sequential calculation of other effects
+  b_g <- train_set %>%
+    left_join(b_i, by="movieId") %>%
+    left_join(b_u, by="userId") %>%
+    group_by(genres) %>%
+    summarize(b_g = sum(rating - mu - b_i - b_u)/(n()+l))
+  
+  b_y <- train_set %>%
+    left_join(b_i, by="movieId") %>%
+    left_join(b_u, by="userId") %>%
+    left_join(b_g, by="genres") %>%
+    group_by(release_year) %>%
+    summarize(b_y = sum(rating - mu - b_i - b_u - b_g)/(n()+l))
+  
+  b_t <- train_set %>%
+    left_join(b_i, by="movieId") %>%
+    left_join(b_u, by="userId") %>%
+    left_join(b_g, by="genres") %>%
+    left_join(b_y, by="release_year") %>%
+    group_by(date) %>%
+    summarize(b_t = sum(rating - mu - b_i - b_u - b_g - b_y)/(n()+l))
+  
+  # Prediction with Capping (efficient for RAM)
+  preds <- test_set %>% 
+    left_join(b_i, by = "movieId") %>%
+    left_join(b_u, by = "userId") %>%
+    left_join(b_g, by = "genres") %>%
+    left_join(b_y, by = "release_year") %>%
+    left_join(b_t, by = "date") %>%
+    mutate(pred = mu + b_i + b_u + b_g + b_y + b_t) %>%
+    mutate(pred = pmin(5, pmax(0.5, pred))) %>% 
+    pull(pred)
+  
+  preds[is.na(preds)] <- mu
+  rmse_val <- RMSE(preds, test_set$rating)
+  
+  # CRITICAL CLEANING FOR 6GB RAM
+  rm(b_i, b_i_temp, b_u, b_g, b_y, b_t, preds)
+  gc() 
+  
+  return(rmse_val)
+})
+
+# Store the best results
+best_l_m7 <- lambdas_finetune[which.min(rmses_model7)]
+best_rmse_m7 <- min(rmses_model7)
+
+# Update the results table
+rmse_results <- rbind(rmse_results,
+                      data.frame(method = "Model 7: Backfitting + Capping + All Effects",  
+                                 RMSE = best_rmse_m7))
+                                 
+print(rmse_results)
+
+# Visualization
+ggplot(data.frame(l = lambdas_finetune, r = rmses_model7), aes(l, r)) +
+  geom_line() + geom_point() +
+  geom_vline(xintercept = best_l_m7, linetype = "dashed", color = "red", alpha = 0.5) +
+  theme_minimal() +
+  labs(title = "Model 7 Lambda Optimization",
+       subtitle = paste0("Optimal Lambda: ", sprintf("%.6f", best_l_m7), 
+                      " | Minimum RMSE: ", sprintf("%.6f", best_rmse_m7)),
+                      x = "Lambda", y = "RMSE")
+
+```
+
+**Observation:** This model achieves our lowest RMSE on the test set: `r round(best_rmse_m7, 5)` with an optimal $\lambda$ of `r best_l_m7`. The combination of backfitting and capping ensures that the model is both stable and realistic.
+
+# Final Model Validation (Hold-out Test)
+
+Having identified the best approach and the optimal $\lambda$ through cross-validation, we now proceed to the final evaluation.
+
+To ensure the highest possible accuracy, we retrain the architecture on the **entire edx dataset**. This maximizes the information used to estimate movie, user, genre, year, and time biases. The final_holdout_test dataset, which has been kept completely separate until now, is used for the one-time final verdict.
+
+## Final Feature Engineering
+
+As specified in the project requirements, the final_holdout_test must not be used during training. However, to be compatible with our model, we must extract the same features (Release Year and Weekly Date) from its existing columns.
+
+```{r final-featuring, cache=TRUE}
+# Preparing the final hold-out set without altering original data points
+final_holdout_test <- final_holdout_test %>% 
+  mutate(
+    # Extract release year from title
+    release_year = as.numeric(str_extract(str_extract(title, "\\(\\d{4}\\)$"), "\\d{4}")),
+    # Convert timestamp to week units
+    date = floor(timestamp / 604800) * 604800
+  )
+  
+# Preparing the full edx set for training
+edx <- edx %>% 
+  mutate(
+    release_year = as.numeric(str_extract(str_extract(title, "\\(\\d{4}\\)$"), "\\d{4}")),
+    date = floor(timestamp / 604800) * 604800
+  )
+
+gc() # Memory cleanup
+```
+
+## The Final Verdict
+
+We apply the Backfitting logic and Capping strategy on the full data.
+
+```{r final-verdict}
+# 1. Final Parameter Assignment
+l_final <- best_l_m7
+mu_edx <- mean(edx$rating)
+
+# 2. Final Bias Calculation on EDX (Backfitting Logic)
+# PASS 1
+b_i_temp <- edx %>% 
+  group_by(movieId) %>% 
+  summarize(b_i = sum(rating - mu_edx)/(n() + l_final))
+
+b_u <- edx %>% 
+  left_join(b_i_temp, by="movieId") %>% 
+  group_by(userId) %>% 
+  summarize(b_u = sum(rating - mu_edx - b_i)/(n() + l_final))
+
+# PASS 2 (Refinement)
+b_i <- edx %>% 
+  left_join(b_u, by="userId") %>% 
+  group_by(movieId) %>% 
+  summarize(b_i = sum(rating - mu_edx - b_u)/(n() + l_final))
+
+# Sequential calculation for other effects
+b_g <- edx %>%
+  left_join(b_i, by="movieId") %>% left_join(b_u, by="userId") %>%
+  group_by(genres) %>% summarize(b_g = sum(rating - mu_edx - b_i - b_u)/(n() + l_final))
+
+b_y <- edx %>%
+  left_join(b_i, by="movieId") %>% left_join(b_u, by="userId") %>% left_join(b_g, by="genres") %>%
+  group_by(release_year) %>% summarize(b_y = sum(rating - mu_edx - b_i - b_u - b_g)/(n() + l_final))
+
+b_t <- edx %>%
+  left_join(b_i, by="movieId") %>% left_join(b_u, by="userId") %>%
+  left_join(b_g, by="genres") %>% left_join(b_y, by="release_year") %>%
+  group_by(date) %>% summarize(b_t = sum(rating - mu_edx - b_i - b_u - b_g - b_y)/(n() + l_final))
+
+# 3. Final Prediction on final_holdout_test
+final_predictions <- final_holdout_test %>% 
+  left_join(b_i, by = "movieId") %>%
+  left_join(b_u, by = "userId") %>%
+  left_join(b_g, by = "genres") %>%
+  left_join(b_y, by = "release_year") %>%
+  left_join(b_t, by = "date") %>%
+  mutate(pred = mu_edx + b_i + b_u + b_g + b_y + b_t) %>%
+  mutate(pred = pmin(5, pmax(0.5, pred))) %>% 
+  pull(pred)
+
+# Handling NAs
+final_predictions[is.na(final_predictions)] <- mu_edx
+
+# 4. RMSE Calculation
+final_holdout_rmse <- RMSE(final_holdout_test$rating, final_predictions)
+
+# Result storage
+rmse_results <- rbind(rmse_results,
+                      data.frame(method = "FINAL MODEL: Backfitting + Capping (Full edx set)",  
+                                 RMSE = final_holdout_rmse))
+print(rmse_results)
+```
+
+The final RMSE achieved on the hold-out test set is `r round(final_holdout_rmse, 5)`.
+
+```{r final-table}
+final_table <- data.frame(
+  "Threshold Target" = 0.86490,
+  "Final RMSE" = final_holdout_rmse,
+  "Status" = ifelse(final_holdout_rmse < 0.86490, "Target Achieved ", "Target Not Met")
+)
+knitr::kable(final_table)
+
+```
+
+# Conclusion
+
+## Summary of the Work
+
+In this project, we developed a movie recommendation system based on the MovieLens 10M dataset. Our approach evolved from a simple global average model to a complex multi-bias architecture integrating movie, user, genre, release year, and temporal effects. 
+
+To ensure the model's robustness and handle the noise inherent in small sample sizes (such as movies with very few ratings or inactive users), we implemented **Regularization**. Furthermore, we refined our bias estimates using a **Backfitting** approach and ensured the realism of our predictions through **Capping** logic.
+
+## Final Results and Achievements
+
+Our modeling process followed a rigorous methodology, using a 10% test split for cross-validation and a final hold-out set for ultimate verification. The final results are summarized below:
+
+| Model Description | RMSE |
+|:---|:---:|
+| Baseline (Average) | `r round(naive_rmse, 5)` |
+| Regularized Movie + User Effects | `r round(min_rmse_model4, 5)` |
+| **Final Model (Backfitting + Capping on Hold-out)** | **`r round(final_holdout_rmse, 5)`** |
+
+The final RMSE of **`r round(final_holdout_rmse, 5)`** successfully met the project target of **0.86490**. This confirms that the identified biases (especially the movie and user effects) carry significant predictive power.
+
+## Limitations and Future Work
+
+While the current model performs well, several areas for improvement remain:
+
+1.  **Matrix Factorization**: Although our bias-based model is efficient, advanced techniques like SVD (Singular Value Decomposition) or ALS (Alternating Least Squares) could capture deeper latent patterns in user-movie interactions that simple additive biases cannot.
+2.  **Computational Constraints**: The analysis was strictly performed under a 6 GB RAM constraint. With more computational resources, we could implement more complex ensemble methods or deep learning architectures (like Neural Collaborative Filtering).
+3.  **Cold Start Problem**: The model still struggles with new users or movies with no prior history. Integrating metadata (like movie plot summaries or user demographics) could help mitigate this.
+
+In conclusion, this project demonstrates that a carefully tuned linear model with regularization and feature engineering can achieve high precision, providing a solid foundation for more advanced recommendation engines.
 
 # OLD STUFF - on garde pour vérifier ultérieurement si intéret
+
 ## Exploratory Data Analysis (EDA)
 
 Before building the model, we must understand the "signals" in our data.
