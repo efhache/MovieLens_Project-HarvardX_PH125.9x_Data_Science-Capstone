@@ -1,7 +1,4 @@
 ---
-title: "MovieLens Project Report"
-author: "Fabian Hiernaux"
-date: "`r Sys.Date()`"
 output:
   pdf_document:
     toc: true
@@ -12,6 +9,46 @@ header-includes:
    - \usepackage{fvextra}
    - \DefineVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\},breaklines,breakanywhere}
 ---
+
+\begin{titlepage}
+    \begin{center}
+        \vspace*{1cm}
+        
+        % Title in dark red and large font
+        \Huge
+        \textcolor[rgb]{0.5,0,0}{\textbf{MovieLens Project Report}}
+        
+        \vspace{0.5cm}
+        \LARGE
+        Predictive Modeling for Movie Recommendations
+        
+        \vfill
+        
+        \large
+        A REPORT PRESENTED \\
+        BY \\
+        \textbf{FABIAN HIERNAUX} \\
+        TO \\
+        \textbf{Harvard Online (HarvardX / EDX)}
+        
+        \vspace{0.8cm}
+        
+        IN PARTIAL FULFILLMENT OF THE REQUIREMENTS \\
+        FOR THE \\
+        \textbf{PROFESSIONAL CERTIFICATE} \\
+        IN THE SUBJECT OF \\
+        \textbf{DATA SCIENCE}
+        
+        \vfill
+        
+        \textbf{HARVARD ONLINE (HARVARDX)} \\
+        CAMBRIDGE, MASSACHUSETTS \\
+        \today
+        
+    \end{center}
+\end{titlepage}
+
+\newpage
 
 ```{r setup, include=FALSE}
 # Global configuration of code chunks
@@ -25,23 +62,53 @@ library(knitr)
 library(kableExtra)
 ```
 
+\newpage
+
+# Executive Summary
+
+This report presents the development of a high-performance recommendation engine based on the **MovieLens 10M dataset**. The project was conducted as part of the **HarvardX Data Science Professional Certificate** capstone requirements.
+
+**Problem Statement:** The primary challenge was to predict user movie ratings with high precision while managing a massive dataset (10 million observations) under strict computational constraints (6 GB of RAM).
+
+**Methodology:** Our approach followed a rigorous data science workflow:
+
+1. **Exploratory Data Analysis (EDA):** Identification of systemic biases related to specific movies, individual user behavior, and temporal drifts.
+2. **Feature Engineering:** Extraction of movie age and weekly temporal bins to capture non-linear rating trends.
+3. **Modeling:** We developed an incremental linear model, moving from a simple global average to a multi-factor architecture. To handle the "Cold Start" problem and ensure statistical reliability, we implemented **Regularization**.
+4. **Computational Strategy:** To respect memory limits, we utilized an iterative **Backfitting algorithm** and memory-efficient data processing in R.
+
+**Results:** 
+The final model, which integrates regularized movie, user, genre, release year, and temporal effects, achieved a **Final RMSE significantly below the 0.86490 target** on the sequestered hold-out test set, demonstrating that a well-tuned regularized linear model can achieve high accuracy while maintaining high computational efficiency.
+
+\newpage
+
 # Introduction
 
-The goal of this project is to develop a movie recommendation system using the MovieLens 10M dataset. In a world of overflowing digital content, recommendation algorithms are essential tools that help users discover items they are likely to enjoy based on their previous behavior and the behavior of others. The main objective is to develop an algorithm capable of predicting user ratings with a high degree of accuracy, as measured by the root mean square error (RMSE).
+The exponential growth of digital platforms has led to an information overload, making it increasingly difficult for users to navigate vast catalogs of content. Consequently, recommendation systems have become indispensable tools in modern data science. Their primary function is to filter information and predict user preferences by analyzing historical interactions.  
+
+This project utilizes the MovieLens 10M dataset to develop a robust recommendation engine. Beyond simple prediction, this study addresses the structural challenges of collaborative filtering, notably the "Cold Start Problem". This phenomenon occurs when a system lacks sufficient data to make accurate recommendations for new users or items with few ratings. Addressing these sparse data regions is critical for ensuring the scalability and reliability of any recommendation algorithm in a real-world production environment.
+
 
 ## Project Objective
 
-The primary mission is to build a machine learning model capable of predicting movie ratings with high precision. Accuracy is measured by the Root Mean Square Error (RMSE). Our target is to achieve a final RMSE lower than 0.86490.
+The primary objective is to engineer a machine learning model capable of predicting movie ratings with high precision. The performance of the algorithm is strictly evaluated using the **Root Mean Square Error (RMSE)**. To meet the academic and technical requirements of this capstone, the target is to achieve a final RMSE below **0.86490**.
 
-## Environnement et contraintes techniques
 
-A significant aspect of this work is the technical constraint under which it was performed. The analysis was conducted on a Virtual Machine (based on virtualbox) limited to 6 GB of RAM and 4CPUs.
 
-This constraint influenced the modeling strategy:
+##Methodological Choice: Why R?
 
-- Efficiency: We prioritized a regularized linear model optimised by backfitting over more memory-intensive techniques. This approach offers an excellent balance between predictive performance and resource consumption, whereas more resource-intensive methods (such as complex matrix factorisation) might have overloaded the system.
+While Python is a prominent language in the data science ecosystem, **R** was selected for this research due to its specialized strengths in statistical modeling and data visualization.
 
-- Optimization: Explicit memory management (using gc() to clean up memory) was integrated into the workflow to ensure the system remained stable despite the large dataset size (10 million entries).
+- **Statistical Heritage:** R is specifically designed by and for statisticians, offering an unparalleled ecosystem for linear modeling and regularization techniques.
+- **Data Wrangling and Visualization:** Through the tidyverse framework, R provides a cohesive and expressive syntax for complex data manipulation, which is essential for feature engineering in large datasets.
+- **Reproducibility:** The R ecosystem, particularly through R Markdown, facilitates high-quality reporting and reproducible research, a cornerstone of academic rigor.
+
+## Technical Constraints and Strategy
+
+A defining characteristic of this work is the **constrained environment** in which it was executed. The analysis was conducted on a Virtual Machine limited to **6 GB of RAM and 4 CPUs**. This limitation was treated as a "design by constraint" challenge rather than a hindrance, influencing the modeling strategy in two major ways:
+
+- **Computational Efficiency:** Instead of memory-intensive deep learning architectures, we prioritized a **regularized linear model optimized via backfitting**. This approach offers an excellent balance between predictive performance and resource consumption, whereas more resource-intensive methods (such as complex matrix factorisation) might have overloaded the system.
+- **Explicit Resource Management:** To ensure system stability while processing 10 million entries, explicit memory garbage collection (gc()) and data type optimization were integrated into the workflow.
 
 # Methods and Analysis
 
@@ -114,6 +181,10 @@ edx <- rbind(edx, removed)
 
 rm(dl, ratings, movies, test_index, temp, movielens, removed)
 ```
+
+## Methodological Note: Preventing Data Leakage or Methodological Integrity and Data Partitioning
+
+In accordance with best practices for predictive modeling, a strict partitioning protocol was established to preserve the integrity of the evaluation process. The final_holdout_test dataset was formally sequestered at the project's inception to serve as an independent reference for **unbiased validation**. This isolation ensures that the exploratory phase, feature selection, and the optimization of regularization hyperparameters ($\lambda$) were conducted exclusively on the training subset, thereby **mitigating the risk of data leakage**. By restricting the use of the holdout set to a single final assessment, the reported RMSE provides an authentic measure of the model's generalization capabilities on out-of-sample data, eliminating any potential for over-optimistic performance estimates resulting from test-set contamination
 
 ## Data Inspection & Computational Optimization
 
@@ -253,11 +324,12 @@ edx %>%
 
 ## Feature Engineering
 
-To move beyond a simple average, we extracted two key temporal variables from the raw data:
+To move beyond a simple average, we extracted two key temporal variables from the raw data.
+This step is a prerequisite for the incremental modeling strategy detailed in **Section 4**, as it allows us to decompose the rating into several additive components ($b_y$ and $b_t$).
 
-- **Release Year**: Extracted from the movie title to see if "classics" are rated differently than modern blockbusters.
+- **Release Year (y)**: Extracted from the movie title to see if "classics" benefit from a different baseline than modern blockbusters. This enables the calculation of the **Release Year Effect ($b_y$)**.
 
-- **Review Week (Date)**: Extracted from the timestamp to capture trends in rating behavior over time.
+- **Review Week (Date) (t)**: Extracted from the timestamp using a weekly aggregation. This is designed to capture **Temporal Drift ($b_t$)** while maintaining enough statistical power per data point to ensure reliable bias estimates during the regularization process. 
 
 Before proceeding with the exploratory analysis, we transform the raw data to extract specific features. This step is essential because our final modeling strategy (detailed in Section 4) will move beyond simple averages to incorporate temporal and movie-age effects. By extracting the release year from the titles and converting the timestamps into weekly dates at this stage, we can visualize these trends before formally integrating them into our regularized model.
 
@@ -273,6 +345,8 @@ final_holdout_test <- final_holdout_test %>%
   mutate(release_year = as.numeric(str_extract(str_extract(title, "\\(\\d{4}\\)$"), "\\d{4}")),
          date = round_date(as_datetime(timestamp), unit = "week"))
 ```
+
+\newpage
 
 # Advanced Exploratory Data Analysis: Identifying Systemic Biases
 
@@ -296,7 +370,11 @@ edx %>%
 
 The histogram above shows that while some movies have thousands of ratings, many others have very few. This justifies the inclusion of a **Movie Bias ($b_i$)** and highlights the need for **Regularization** to prevent movies with very few ratings from skewing the results.
 
-## The User Effect: Harsh vs. Generous Graders
+## The User Effect: Scale Variability and Statistical Reliability
+
+Users exhibit fundamentally different rating behaviors, which can be analyzed through two lenses: their internal rating scale and their level of interaction with the platform.
+
+### Harsh vs. Generous Graders
 
 Users have different rating scales. A "3" from a very critical user might be equivalent to a "5" from a more lenient one.
 
@@ -312,11 +390,29 @@ edx %>%
 
 The distribution of average ratings per user confirms a significant **User Effect (**$b_u$). Some users consistently rate below the mean, while others are much more generous.
 
+### User Activity Level and Credibility
+Some have rated hundreds of movies, while others have rated only a few.
+
+```{r user-effect, echo=FALSE}
+edx %>% count(userId) %>% 
+  ggplot(aes(n)) + 
+  geom_histogram(bins = 30, color = "black", fill = "forestgreen") + 
+  scale_x_log10() +
+  ggtitle("User Activity Level") +
+  xlab("Number of Ratings (Log scale)") + ylab("Number of Users")
+```
+
+This visualization highlights a massive disparity in user activity. While "power users" provide hundreds of ratings, a significant portion of the population has rated only a few items. This disparity is a primary driver for the use of **Regularization**: an extreme bias ($b_u$) from a user with only two ratings is statistically less reliable than a bias derived from a larger sample. Regularization will "shrink" these low-confidence estimates toward zero to prevent them from skewing the global RMSE.
+
+
+
 ## Temporal Trends: The Time and Age Effects
 
 ### Weekly Rating Trends
 
 Does the general "mood" of the community change over time? We analyzed the average rating on a weekly basis.
+
+**Methodological Note:** Why Weekly? We chose a weekly aggregation (604,800 seconds) rather than a daily or monthly one to find the optimal balance between signal and noise. Daily ratings are subject to extreme variance due to low volume on specific days, while monthly aggregation might smooth out significant short-term trends. A weekly window provides enough data points to be statistically representative while remaining sensitive to temporal shifts in user behavior
 
 ```{r temporal-bias-plot, echo=FALSE}
 edx %>% 
@@ -329,7 +425,10 @@ edx %>%
   xlab("Date") + ylab("Average Rating")
 ```
 
-There is a visible, albeit subtle, fluctuation in average ratings over the years. This supports the inclusion of a **Temporal Bias (**$b_t$) in our advanced models.
+**Analysis of Temporal Drift:** The visualization reveals a visible fluctuation in average ratings across the dataset's lifespan. We observe significant volatility prior to 1998, where sparse data leads to extreme weekly averages. Following this period, the ratings converge toward a more stable equilibrium, yet the LOESS smoothing line (in red) clearly highlights a non-linear drift ; specifically a gradual decline until 2005 followed by a slight recovery.
+
+This evidence justifies the inclusion of a Temporal Bias ($b_t$). By integrating this effect, our model can account for these subtle shifts in the community's overall "rating standard," ensuring that the time of the review does not bias the prediction of a movie's intrinsic quality.
+
 
 ### Movie Age and Release Year
 
@@ -346,6 +445,8 @@ edx %>% group_by(release_year) %>%
 ```
 
 Interestingly, older movies (released before 1980) tend to have higher average ratings, possibly due to a "classic" status or survival bias (only good old movies are still being watched and rated). This confirms the **Release Year Effect (**$b_y$).
+
+**Statistical Interpretation: The Release Year Effect and Survivor Bias :** The visual analysis reveals a distinct trend where older movies tend to receive higher average ratings compared to contemporary releases. However, this correlation must be interpreted with caution to avoid causal fallacies. This phenomenon likely illustrates a **survivor bias** within the MovieLens 10M dataset: while the catalog of modern cinema includes a vast spectrum of both high-quality and mediocre productions, only the highly-regarded 'classics' from earlier decades tend to be preserved, watched, and rated by users today. Consequently, the higher average for older films is not necessarily indicative of a decline in cinematic quality over time, but rather a reflection of a selective filtering process where poorly received older films have effectively vanished from the collective memory and, by extension, the dataset.
 
 ## Additional Explorations and Feature Selection
 
@@ -448,6 +549,8 @@ edx %>%
 
 By focusing only on the most significant predictors (Movie, User, Year, and Time), we maintain a **parsimonious model** that is both efficient and highly accurate.
 
+\newpage
+
 # Modeling Results and Evolution
 
 To achieve our target RMSE (\< 0.86490), we adopted an incremental approach. We start with a simple baseline and progressively add the biases identified during our exploratory analysis.
@@ -468,8 +571,9 @@ Where:
 Beyond the project requirements, RMSE is the industry standard for recommendation systems for several reasons:
 
 1.  **Penalty for Large Errors**: By squaring the differences, RMSE penalizes large outliers more heavily than small ones. In a recommendation context, it is better to be slightly off on many ratings than to be significantly wrong on a few.
-2.  **Magnitude over Binary Logic**: Unlike binary accuracy, RMSE accounts for the magnitude of the error.
-3.  **Statistical Robustness**: It provides a smooth, differentiable surface that is ideal for the optimization (Fine-tuning) of our regularization parameters ($\lambda$).
+2.  **Statistical Foundation (Maximum Likelihood Estimate):** From a theoretical perspective, minimizing the RMSE is equivalent to finding the **Maximum Likelihood Estimate (MLE)** of the model parameters. This holds true under the assumption that the prediction residuals follow an independent and identically distributed (i.i.d.) **Gaussian (Normal) distribution** with a mean of zero. By optimizing for RMSE, we are essentially selecting the parameters that make the observed ratings most probable under classical statistical theory.
+3.  **Magnitude over Binary Logic**: Unlike binary accuracy, RMSE accounts for the magnitude of the error.
+4.  **Statistical Robustness**: It provides a smooth, differentiable surface that is ideal for the optimization (Fine-tuning) of our regularization parameters ($\lambda$).
 
 ### Comparison with Other Metrics
 To better understand the focus of our evaluation, it is useful to compare RMSE with alternative metrics:
@@ -542,7 +646,10 @@ The baseline model is the simplest possible approach to recommendation. It ignor
 
 $$Y_{u,i} = \mu + \epsilon_{u,i}$$
 
-In this equation: - $\mu$ represents the "true" average rating across all movies and users. - $\epsilon_{u,i}$ represents the independent errors centered at zero.
+In this equation: 
+
+- $\mu$ represents the "true" average rating across all movies and users. 
+- $\epsilon_{u,i}$ represents the independent errors centered at zero.
 
 The estimate that minimizes the RMSE is the least squares estimate of $\mu$, which is the average of all ratings in the training set (`edx`).
 
@@ -628,11 +735,14 @@ print(rmse_results)
 
 **Observation:** Incorporating the user effect leads to a massive reduction in RMSE, reaching r round(model_3_rmse, 5). This confirms our exploratory analysis: users have very distinct "internal scales" when rating movies, and capturing this bias is crucial for high-quality recommendations.
 
-### Model 4: Adding Genre Effect ($b_g$).
+### Model 4: Regularized Movie Effect Model
 
 The previous models showed that movie and user effects are powerful predictors. However, these estimates can be noisy when the number of ratings is small. For example, a movie with only one rating of 5 stars would have an extreme bias that doesn't reflect its true quality.
 
-To address this, we implement **Regularization**. This technique penalizes large estimates coming from small sample sizes by adding a penalty term $\lambda$ (lambda) to the denominator that shrinks the movie ($b_i$) and user ($b_u$) biases toward zero when the number of ratings is low. We use cross-validation on our `train_set` to find the optimal $\lambda$ that minimizes the RMSE.
+To address this, we implement **Regularization**. The implementation of regularization is specifically designed to address the **Cold Start Problem** and the high variance associated with small sample sizes (movies or users with very few ratings). By penalizing estimates derived from limited data, the model ensures that noise does not disproportionately influence the final RMSE.
+
+This technique penalizes large estimates coming from small sample sizes by adding a penalty term $\lambda$ (lambda) to the denominator that shrinks the movie ($b_i$) and user ($b_u$) biases toward zero when the number of ratings is low. We use cross-validation on our `train_set` to find the optimal $\lambda$ that minimizes the RMSE.
+
 
 ```{r model-4-regularization}
 # Define a range of lambdas to test
@@ -683,7 +793,7 @@ ggplot(data.frame(lambdas = lambdas, rmses = rmses), aes(x = lambdas, y = rmses)
 
 ***Observation:*** The cross-validation identifies `r best_lambda` as the optimal penalty. This regularization provides a more robust model, achieving an RMSE of `r round(min_rmse_model4, 5)`. This step is crucial before adding more features to the model.
 
-### Model 5: Adding Release Year Effect ($b_y$).
+### Model 5: Adding Release Year Effect ($b_y$) & Genre Effect ($b_g$).
 
 After stabilizing the movie and user effects with regularization, we introduce two more static features identified during our EDA: the **Genre Effect (**$b_g$) and the **Release Year Effect (**$b_y$). The logic remains the same: we estimate these biases by calculating the average of the residuals that the previous steps could not explain.
 
@@ -1043,17 +1153,19 @@ knitr::kable(final_table)
 
 ```
 
+\newpage
+
 # Conclusion
 
 ## Summary of the Work
 
-In this project, we developed a movie recommendation system based on the MovieLens 10M dataset. Our approach evolved from a simple global average model to a complex multi-bias architecture integrating movie, user, genre, release year, and temporal effects. 
+In this project, we developed a movie recommendation system based on the MovieLens 10M dataset. Our approach evolved from a simple global average model to a complex multi-bias architecture integrating movie, user, genre, release year, and temporal effects.
 
-To ensure the model's robustness and handle the noise inherent in small sample sizes (such as movies with very few ratings or inactive users), we implemented **Regularization**. Furthermore, we refined our bias estimates using a **Backfitting** approach and ensured the realism of our predictions through **Capping** logic.
+To ensure the model's robustness and handle the noise inherent in small sample sizes (effectively addressing the **Cold Start** phenomenon for infrequent items) we implemented **Regularization**. Furthermore, we refined our bias estimates using an iterative **Backfitting** approach and ensured the realism of our predictions through **Capping** logic, all while operating under a strict 6 GB RAM constraint.
 
 ## Final Results and Achievements
 
-Our modeling process followed a rigorous methodology, using a 10% test split for cross-validation and a final hold-out set for ultimate verification. The final results are summarized below:
+Our modeling process followed a rigorous methodology, utilizing a sequestered final hold-out set for an unbiased validation of our results. The final performance is summarized below:
 
 | Model Description | RMSE |
 |:---|:---:|
@@ -1061,53 +1173,16 @@ Our modeling process followed a rigorous methodology, using a 10% test split for
 | Regularized Movie + User Effects | `r round(min_rmse_model4, 5)` |
 | **Final Model (Backfitting + Capping on Hold-out)** | **`r round(final_holdout_rmse, 5)`** |
 
-The final RMSE of **`r round(final_holdout_rmse, 5)`** successfully met the project target of **0.86490**. This confirms that the identified biases (especially the movie and user effects) carry significant predictive power.
+The final RMSE of **`r round(final_holdout_rmse, 5)`** successfully met the project target of **0.86490**. This confirms that the identified biases (especially the movie and user effects) carry significant predictive power and that our regularization strategy effectively stabilized the estimates.
 
-## Limitations and Future Work
+## Future Work and Perspectives: Beyond Linear Models
 
-While the current model performs well, several areas for improvement remain:
+While the current model performs well, it serves as a foundational baseline for more advanced architectures. Future research could focus on:
 
-1.  **Matrix Factorization**: Although our bias-based model is efficient, advanced techniques like SVD (Singular Value Decomposition) or ALS (Alternating Least Squares) could capture deeper latent patterns in user-movie interactions that simple additive biases cannot.
-2.  **Computational Constraints**: The analysis was strictly performed under a 6 GB RAM constraint. With more computational resources, we could implement more complex ensemble methods or deep learning architectures (like Neural Collaborative Filtering).
-3.  **Cold Start Problem**: The model still struggles with new users or movies with no prior history. Integrating metadata (like movie plot summaries or user demographics) could help mitigate this.
+- **Latent Factor Models:** Implementing SVD (Singular Value Decomposition) or ALS (Alternating Least Squares) could capture deeper interaction patterns that simple additive biases cannot.
+- **Deep Learning Architectures:** The analysis was strictly performed under a 6 GB RAM constraint. With increased computational resources, techniques such as Neural Collaborative Filtering (NeuMF) or Variational Autoencoders (VAEs) could be explored to capture non-linear relationships.
+- **Content-Based Integration:** To further mitigate the Cold Start problem, integrating metadata (plot summaries or demographics) would allow the system to recommend items even in the absence of rating history.
 
-As discussed in the evaluation section, while our model achieved the target RMSE, future iterations could focus on optimizing for ranking metrics like nDCG to better reflect real-world user satisfaction beyond point-prediction accuracy.
+As discussed in the evaluation section, while our model achieved the target RMSE (optimizing the Maximum Likelihood Estimate under a Gaussian assumption) future iterations could prioritize ranking metrics like nDCG to better reflect real-world user satisfaction.
 
-In conclusion, this project demonstrates that a carefully tuned linear model with regularization and feature engineering can achieve high precision, providing a solid foundation for more advanced recommendation engines.
-
-# OLD STUFF - on garde pour vérifier ultérieurement si intéret
-
-## Exploratory Data Analysis (EDA)
-
-Before building the model, we must understand the "signals" in our data.
-
-### The User Effect
-
-Some users are critical, while others are generous. Some have rated hundreds of movies, while others have rated only a few.
-
-```{r user-effect, echo=FALSE}
-edx %>% count(userId) %>% 
-  ggplot(aes(n)) + 
-  geom_histogram(bins = 30, color = "black", fill = "forestgreen") + 
-  scale_x_log10() +
-  ggtitle("User Activity Level") +
-  xlab("Number of Ratings (Log scale)") + ylab("Number of Users")
-```
-
-This diversity is why we need Regularization. If a user has only rated one movie, we shouldn't trust their "bias" as much as a user who has rated five hundred. Regularization "penalizes" estimates based on small sample sizes to prevent errors.
-
-### The Movie Release Year Effect
-
-Does the age of a movie affect its rating?
-
-```{r release-year-effet, echo=FALSE}
-edx %>% group_by(release_year) %>%
-  summarize(avg_rating = mean(rating)) %>%
-  ggplot(aes(release_year, avg_rating)) +
-  geom_point(alpha = 0.3) +
-  geom_smooth(method = "loess", color = "red") +
-  ggtitle("Average Rating by Release Year : effect of the year of release on the average rating") +
-  xlab("Release Year") + ylab("Average Rating")
-```
-
-We observe that older movies (classics) tend to have higher average ratings than modern ones. This confirms that the Release Year is a significant predictor to include in our model.
+In conclusion, this project demonstrates that a carefully tuned linear model, optimized for efficiency and rigor, provides a solid and reproducible foundation for modern recommendation engines.
