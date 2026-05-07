@@ -82,7 +82,9 @@ This report presents the development of a high-performance recommendation engine
 4. **Computational Strategy:** To respect memory limits, we utilized an iterative **Backfitting algorithm** and memory-efficient data processing in R.
 
 **Results:** 
-The final model, which integrates regularized movie, user, genre, release year, and temporal effects, achieved a **Final RMSE significantly below the 0.86490 target** on the sequestered hold-out test set, demonstrating that a well-tuned regularized linear model can achieve high accuracy while maintaining high computational efficiency.
+The final model, which integrates regularized movie, user, genre, release year, and temporal effects, achieved a **Final RMSE (0.86332) significantly below the 0.86490 target** on the sequestered hold-out test set, demonstrating that a well-tuned regularized linear model can achieve high accuracy while maintaining high computational efficiency.
+
+This result highlights that carefully engineered linear models with regularization can rival more complex approaches under constrained computational environments.
 
 \newpage
 
