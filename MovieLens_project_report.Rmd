@@ -99,9 +99,7 @@ This project utilizes the MovieLens 10M dataset to develop a robust recommendati
 
 The primary objective is to engineer a machine learning model capable of predicting movie ratings with high precision. The performance of the algorithm is strictly evaluated using the **Root Mean Square Error (RMSE)**. To meet the academic and technical requirements of this capstone, the target is to achieve a final RMSE below **0.86490**.
 
-
-
-##Methodological Choice: Why R?
+## Methodological Choice: Why R?
 
 While Python is a prominent language in the data science ecosystem, **R** was selected for this capstone due to its specialized strengths in statistical modeling and data visualization.
 
