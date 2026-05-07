@@ -101,7 +101,7 @@ The primary objective is to engineer a machine learning model capable of predict
 
 ##Methodological Choice: Why R?
 
-While Python is a prominent language in the data science ecosystem, **R** was selected for this research due to its specialized strengths in statistical modeling and data visualization.
+While Python is a prominent language in the data science ecosystem, **R** was selected for this capstone due to its specialized strengths in statistical modeling and data visualization.
 
 - **Statistical Heritage:** R is specifically designed by and for statisticians, offering an unparalleled ecosystem for linear modeling and regularization techniques.
 - **Data Wrangling and Visualization:** Through the tidyverse framework, R provides a cohesive and expressive syntax for complex data manipulation, which is essential for feature engineering in large datasets.
@@ -114,7 +114,33 @@ A defining characteristic of this work is the **constrained environment** in whi
 - **Computational Efficiency:** Instead of memory-intensive deep learning architectures, we prioritized a **regularized linear model optimized via backfitting**. This approach offers an excellent balance between predictive performance and resource consumption, whereas more resource-intensive methods (such as complex matrix factorisation) might have overloaded the system.
 - **Explicit Resource Management:** To ensure system stability while processing 10 million entries, explicit memory garbage collection (gc()) and data type optimization were integrated into the workflow.
 
+\newpage
+
+# Literature Review
+
+The development of modern recommender systems has been strongly influenced by advances in matrix factorization, implicit-feedback modeling, and neural architectures. This section synthesizes four foundational contributions that shaped contemporary collaborative filtering, combining exact citations from the original works with contextualized paraphrases.
+
+## Matrix Factorization and the Netflix Prize (Koren, Bell & Volinsky, 2009)
+
+Koren, Bell and Volinsky (2009) provide a seminal overview of matrix factorization techniques and their decisive impact during the Netflix Prize competition. They emphasize that latent factor models capture user–item interactions more effectively than neighborhood-based approaches, noting that *“matrix factorization models are superior to classic nearest-neighbor techniques for producing product recommendations”* (Koren et al., 2009, p. 30). Their work also highlights the flexibility of factorization models to incorporate biases, temporal dynamics, and implicit feedback, making them a cornerstone of modern recommender systems.
+
+## Gradient-Descent Factorization (Funk, 2006)
+
+In a widely cited technical note, Funk (2006) introduced a practical gradient-descent approach to matrix factorization, now commonly known as Funk-SVD. His method approximates the rating matrix using low‑rank user and item vectors, updated iteratively through stochastic gradient descent. As he explains: *“We'll assume that a user's rating of a movie is composed of a sum of preferences about the various aspects of that movie”* (Funk, 2006, p. 2). Although informal and published as a blog post, this contribution profoundly influenced subsequent academic work by demonstrating that large-scale factorization could be trained efficiently without computing a full SVD.
+
+## Implicit Feedback Modeling (Hu, Koren & Volinsky, 2008)
+
+Hu, Koren and Volinsky (2008) address the fundamental differences between explicit and implicit feedback, proposing the Weighted Regularized Matrix Factorization (WRMF) model. They stress that implicit datasets lack explicit preference values, observing that *“implicit feedback datasets do not contain explicit ratings expressing the degree of preference”* (Hu et al., 2008, p. 263). Their framework distinguishes between binary preference (whether a user interacted with an item) and confidence (how strongly the interaction reflects preference), introducing a confidence matrix that scales with interaction frequency. This formulation has become a standard reference for recommender systems based on implicit signals.
+
+## Neural Collaborative Filtering (He et al., 2017)
+
+He et al. (2017) extend collaborative filtering by replacing the linear inner product of matrix factorization with a learnable neural architecture. They argue that the classical MF interaction function is inherently limited, stating that *“MF is limited in its expressiveness due to the linearity of inner product”* (He et al., 2017, p. 173). Their Neural Collaborative Filtering (NCF) framework generalizes MF and introduces NeuMF, a hybrid model combining linear and non-linear interaction functions. Their experiments on MovieLens and Pinterest demonstrate that deeper neural architectures can capture complex user–item relationships beyond the reach of traditional factorization.
+
+\newpage
+
 # Methods and Analysis
+
+Based on the literature reviewed in Chapter 2, this project focuses on a Baseline Regularized Linear Model. The methodology adopts a step-by-step approach as detailed in the rest of the document.
 
 ## Data Preparation
 
@@ -264,9 +290,10 @@ The histogram reveals a "positivity bias," with most ratings above 3. Furthermor
 
 ### Overcoming Memory Constraints: Genre Analysis
 
-One of the main technical challenges of this project was the 6 GB RAM limitation of the Virtual Machine. A standard Tidyverse approach to count genres (using separate_rows() on 9 million rows) causes system instability due to memory exhaustion.
+While modern research focuses on deep learning (He et al., 2017 ; cfr litterature review chapter), these models require significant computational overhead. In this capstone, one of the main technical challenges of this project was the 6 GB RAM limitation of the Virtual Machine. A standard Tidyverse approach to count genres (using separate_rows() on 9 million rows) causes system instability due to memory exhaustion.
+The methodology is intentionally designed to respect this constraint. This aligns with the 'minimalist' efficiency principles discussed in early Netflix Prize literature (Funk, 2006  ; cfr litterature review chapter), where the goal was to achieve high accuracy with scalable, low-memory algorithms.
 
-To identify the top genres, we evaluated three different algorithms to balance accuracy and performance:
+In this capstone, to identify the top genres, we evaluated three different algorithms to balance accuracy and performance:
 
 - Method 1 (Sampling): Taking a 1M row sample for quick estimation.
 - Method 2 (String Detection): Using str_detect for targeted counting.
@@ -328,14 +355,27 @@ edx %>%
 
 ## Feature Engineering
 
-To move beyond a simple average, we extracted two key temporal variables from the raw data.
-This step is a prerequisite for the incremental modeling strategy detailed in **Section 4**, as it allows us to decompose the rating into several additive components ($b_y$ and $b_t$).
 
-- **Release Year (y)**: Extracted from the movie title to see if "classics" benefit from a different baseline than modern blockbusters. This enables the calculation of the **Release Year Effect ($b_y$)**.
+Before proceeding with the exploratory analysis, we transform the raw data to extract specific features. This step is essential as our modeling strategy moves beyond simple averages to incorporate temporal and movie-age effects.
 
-- **Review Week (Date) (t)**: Extracted from the timestamp using a weekly aggregation. This is designed to capture **Temporal Drift ($b_t$)** while maintaining enough statistical power per data point to ensure reliable bias estimates during the regularization process. 
+The feature engineering focuses on two key dimensions:
 
-Before proceeding with the exploratory analysis, we transform the raw data to extract specific features. This step is essential because our final modeling strategy (detailed in Section 4) will move beyond simple averages to incorporate temporal and movie-age effects. By extracting the release year from the titles and converting the timestamps into weekly dates at this stage, we can visualize these trends before formally integrating them into our regularized model.
+- **Release Year ($y$)**: Extracted from the movie title to investigate if "classics" benefit from a different baseline than modern blockbusters. This enables the calculation of the **Release Year Effect ($b_y$)**.
+- **Review Week ($t$)**: Extracted from the timestamp using weekly aggregation. This is designed to capture **Temporal Drift ($b_t$)** while maintaining sufficient statistical power per data point to ensure reliable bias estimates during regularization.
+
+**Theoretical Framework**
+
+The model implemented in this capstone follows the **Baseline Predictor** framework defined by Koren et al. (2009 ; cfr litterature review chapter). According to this framework, a significant portion of the variation in ratings is explained by systematic biases rather than complex interactions. Before considering latent factors (SVD), it is critical to account for these biases using an additive decomposition:
+
+$$Y_{u,i,t,y} = \mu + b_i + b_u + b_y + b_t + \epsilon_{u,i,t,y}$$
+
+Where:
+
+- $\mu$ is the global average rating.
+- $b_i$ and $b_u$ represent the movie and user effects.
+- $b_y$ and $b_t$ represent the release year and temporal effects extracted during this stage.
+
+By regularizing these effects with a penalty term ($\lambda$), we ensure the stability of the estimates for movies or users with low rating counts, a technique directly derived from the regularized approaches popularized during the Netflix Prize (Funk, 2006; Koren et al., 2009 ; cfr litterature review chapter).
 
 ```{r feature-engineering, cache=TRUE}
 # Extracting release year and converting timestamp to weekly dates
@@ -1051,6 +1091,8 @@ ggplot(data.frame(l = lambdas_finetune, r = rmses_model7), aes(l, r)) +
 
 **Observation:** This model achieves our lowest RMSE on the test set: `r round(best_rmse_m7, 5)` with an optimal $\lambda$ of `r best_l_m7`. The combination of backfitting and capping ensures that the model is both stable and realistic.
 
+\newpage
+
 # Final Model Validation (Hold-out Test)
 
 Having identified the best approach and the optimal $\lambda$ through cross-validation, we now proceed to the final evaluation.
@@ -1181,12 +1223,26 @@ The final RMSE of **`r round(final_holdout_rmse, 5)`** successfully met the proj
 
 ## Future Work and Perspectives: Beyond Linear Models
 
-While the current model performs well, it serves as a foundational baseline for more advanced architectures. Future research could focus on:
+While the current model performs well as a regularized baseline, it serves as a foundational step toward more complex architectures. Future evolutions should focus on addressing the inherent limitations of linear additive models:
+COMMENTED : While the current model performs well, it serves as a foundational baseline for more advanced architectures. Future research could focus on:
 
-- **Latent Factor Models:** Implementing SVD (Singular Value Decomposition) or ALS (Alternating Least Squares) could capture deeper interaction patterns that simple additive biases cannot.
-- **Deep Learning Architectures:** The analysis was strictly performed under a 6 GB RAM constraint. With increased computational resources, techniques such as Neural Collaborative Filtering (NeuMF) or Variational Autoencoders (VAEs) could be explored to capture non-linear relationships.
+- **Latent Factor Models (Matrix Factorization):**  As established by Koren et al. (2009), while biases ($b_i, b_u$) capture significant variance, they do not account for the multidimensional "features" of movies or tastes of users. Implementing SVD (Singular Value Decomposition) or ALS (Alternating Least Squares) as popularized by Funk (2006) could capture deeper interaction patterns that simple additive biases cannot.
+- **Handling Implicit Feedback:** The current analysis relies exclusively on explicit ratings. However, following the framework of Hu et al. (2008), future iterations could integrate implicit signals (such as browsing history or incomplete views). By treating interaction frequency as a "confidence" level rather than a preference score, the model could better mitigate the data sparsity inherent in the MovieLens dataset.
+- **Deep Learning Architectures:** The analysis was strictly performed under a 6 GB RAM constraint. With increased computational resources, techniques such as Neural Collaborative Filtering (NCF), as proposed by He et al. (2017),  or Variational Autoencoders (VAEs) could be explored to capture non-linear relationships.
 - **Content-Based Integration:** To further mitigate the Cold Start problem, integrating metadata (plot summaries or demographics) would allow the system to recommend items even in the absence of rating history.
 
 As discussed in the evaluation section, while our model achieved the target RMSE (optimizing the Maximum Likelihood Estimate under a Gaussian assumption) future iterations could prioritize ranking metrics like nDCG to better reflect real-world user satisfaction.
 
-In conclusion, this project demonstrates that a carefully tuned linear model, optimized for efficiency and rigor, provides a solid and reproducible foundation for modern recommendation engines.
+In conclusion, this project demonstrates that a carefully tuned linear model, optimized for efficiency and rigor, provides a solid and reproducible foundation for modern recommendation engines.  By grounding our future perspectives in the seminal works of the Netflix Prize and the recent neural turn, we define a clear path toward state-of-the-art performance.
+
+\newpage
+
+# References
+
+Funk, S. (2006). *Netflix Update: Try This at Home*. Sifter.org. https://sifter.org/~simon/journal/20061211.html
+
+He, X., Liao, L., Zhang, H., Nie, L., Hu, X., & Chua, T.-S. (2017). Neural Collaborative Filtering. *Proceedings of the 26th International Conference on World Wide Web*, 173–182. https://doi.org/10.1145/3038912.3052569
+
+Hu, Y., Koren, Y., & Volinsky, C. (2008). Collaborative Filtering for Implicit Feedback Datasets. *Proceedings of the 2008 Eighth IEEE International Conference on Data Mining*, 263–272. https://doi.org/10.1109/ICDM.2008.22
+
+Koren, Y., Bell, R., & Volinsky, C. (2009). Matrix Factorization Techniques for Recommender Systems. *Computer*, 42(8), 30–37. https://doi.org/10.1109/MC.2009.263
