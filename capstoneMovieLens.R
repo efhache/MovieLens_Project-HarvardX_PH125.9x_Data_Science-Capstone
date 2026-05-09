@@ -1247,3 +1247,4 @@ print(final_table)
 # 7. Cleanup to free memory
 rm(b_i, b_u, b_g, b_y, b_t, final_predictions)
 gc()
+gc()
