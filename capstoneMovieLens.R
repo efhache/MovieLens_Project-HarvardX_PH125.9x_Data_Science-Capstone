@@ -599,7 +599,7 @@ check_genre_loyalty <- function(genre_name) {
 # Applying the function to the selected genres
 loyalty_data <- map_df(genres_to_test, check_genre_loyalty)
 
-v
+# Corrected visualisation
 ggplot(loyalty_data, aes(x = ratio, y = avg_rating)) + # Using avg_rating
   # We use geom_bin2d or a very low alpha value to avoid overloading the RAM when displaying the image
   geom_smooth(method = "gam", color = "darkblue", size = 1) +
