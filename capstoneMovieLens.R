@@ -184,21 +184,18 @@ edx %>%
 ##########################################################
 # Part 3: Creating the train_set and test_set
 ##########################################################
-# EN : Creating a training set and a test set from edx
-# FR : Création d'un set d'entraînement et d'un set de test à partir de edx
+# Creating a training set and a test set from edx
 set.seed(1, sample.kind="Rounding")
 test_index <- createDataPartition(y = edx$rating, times = 1, p = 0.2, list = FALSE)
 train_set <- edx[-test_index,]
 temp <- edx[test_index,]
 
-# EN : Ensure that the users and films in the test_set are also in the train_set
-# FR : S'assurer que les utilisateurs et films du test_set sont aussi dans le train_set
+# Ensure that the users and films in the test_set are also in the train_set
 test_set <- temp %>% 
   semi_join(train_set, by = "movieId") %>%
   semi_join(train_set, by = "userId")
 
-# EN : Add the deleted lines to the train_set
-# FR : Ajouter les lignes supprimées au train_set
+# Add the deleted lines to the train_set
 removed <- anti_join(temp, test_set)
 train_set <- rbind(train_set, removed)
 
@@ -1041,7 +1038,7 @@ cat("Current RMSE with time-varying effects:", current_rmse)
 # account for each other, leading to more stable and accurate estimates. 
 # 2. DATA BOUNDARY LOGIC (Capping): Linear models can predict values > 5 or < 0.5. 
 
-# 1. Harmonisation du nom de la variable mu
+# 1. Standardising the name of the variable mu
 mu <- mu_hat
 
 # 2. Préparation des colonnes nécessaires (Feature Engineering)
@@ -1050,7 +1047,7 @@ train_set <- train_set %>%
   mutate(release_year = as.numeric(str_extract(str_extract(title, "\\(\\d{4}\\)$"), "\\d{4}")),
          date = floor(timestamp / 604800) * 604800)
 
-# Pour le test_set
+# For the test_set
 test_set <- test_set %>% 
   mutate(release_year = as.numeric(str_extract(str_extract(title, "\\(\\d{4}\\)$"), "\\d{4}")),
          date = floor(timestamp / 604800) * 604800)
@@ -1069,13 +1066,13 @@ rmses_model7 <- sapply(lambdas_finetune, function(l){
     group_by(userId) %>% 
     summarize(b_u = sum(rating - mu - b_i)/(n()+l))
   
-  # PASSE 2 (Refinement) - On réécrase b_i pour ne pas stocker deux versions
+  # STEP 2 (Refinement) – We overwrite b_i so as not to store two versions
   b_i <- train_set %>% 
     left_join(b_u, by="userId") %>% 
     group_by(movieId) %>% 
     summarize(b_i = sum(rating - mu - b_u)/(n()+l))
   
-  # Autres effets calculés séquentiellement
+  # Other effects calculated sequentially
   b_g <- train_set %>%
     left_join(b_i, by="movieId") %>%
     left_join(b_u, by="userId") %>%
@@ -1097,7 +1094,7 @@ rmses_model7 <- sapply(lambdas_finetune, function(l){
     group_by(date) %>%
     summarize(b_t = sum(rating - mu - b_i - b_u - b_g - b_y)/(n()+l))
   
-  # Prédiction avec Capping (pmin/pmax est très efficace en mémoire)
+  # Prediction with capping (pmin/pmax is very efficient in memory)
   preds <- test_set %>% 
     left_join(b_i, by = "movieId") %>%
     left_join(b_u, by = "userId") %>%
@@ -1111,9 +1108,9 @@ rmses_model7 <- sapply(lambdas_finetune, function(l){
   preds[is.na(preds)] <- mu
   rmse_val <- RMSE(preds, test_set$rating)
   
-  # NETTOYAGE CRITIQUE POUR VM 6GO
+  # CRITICAL CLEAN-UP FOR 6GB VM
   rm(b_i, b_u, b_g, b_y, b_t, preds)
-  gc() # Force la libération de la RAM avant le prochain lambda
+  gc() # Forces RAM to be released before the next lambda
   
   return(rmse_val)
 })
@@ -1121,17 +1118,17 @@ rmses_model7 <- sapply(lambdas_finetune, function(l){
 best_l_m7 <- lambdas_finetune[which.min(rmses_model7)]
 best_rmse_m7 <- min(rmses_model7)
 
-# Affichage des résultats
-cat("--- RÉSULTATS MODÈLE 7 ---")
+# Displaying results
+cat("--- MODEL 7 RESULTS ---")
 cat("Optimal Lambda (Test Set):", best_l_m7)
 cat("Improved Test RMSE:", best_rmse_m7)
 
-# Mise à jour du tableau de suivi des résultats
+# Update to the results tracking table
 rmse_results <- rbind(rmse_results,
                       data.frame(method = "Model 7: Backfitting + Capping + All Effects",  
                                  RMSE = best_rmse_m7))
 
-# Visualisation de l'optimisation
+# Visualisation of the optimisation
 plot(lambdas_finetune, rmses_model7, type = "b", 
      main = "Optimization of Lambda for Model 7",
      xlab = "Lambda", ylab = "RMSE")
@@ -1167,12 +1164,12 @@ final_holdout_test <- final_holdout_test %>%
 l_final <- best_l_m7
 mu_edx <- mean(edx$rating) # Global average of the full edx set
 
-# Ajout des colonnes nécessaires à edx pour le modèle final
+# Adding the columns required by EDX for the final model
 edx <- edx %>% 
   mutate(release_year = as.numeric(str_extract(str_extract(title, "\\(\\d{4}\\)$"), "\\d{4}")),
          date = floor(timestamp / 604800) * 604800)
 
-# Nettoyage pour libérer de la RAM après la mutation
+# Cleaning up to free up RAM after the migration
 gc()
 
 # 3. Final Bias Calculation on EDX (using Backfitting logic)
