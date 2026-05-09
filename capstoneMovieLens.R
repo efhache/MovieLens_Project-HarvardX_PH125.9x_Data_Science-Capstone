@@ -355,11 +355,11 @@ edx %>%
 edx %>% 
   group_by(userId) %>% 
   summarize(n_user = n(), avg_user = mean(rating)) %>% 
-  filter(n_user >= 10) %>% # On ignore ceux qui ont trop peu de notes pour être significatifs
+  filter(n_user >= 10) %>% # Those with too few ratings to be meaningful are ignored
   ggplot(aes(n_user, avg_user)) +
   geom_point(alpha = 0.1, color = "darkblue") +
   #geom_smooth(method = "loess", color = "red") +
-  # On utilise "gam" au lieu de "loess" pour gérer le volume de données
+  # We use ‘gam’ instead of ‘loess’ to handle the volume of data
   geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), color = "red") +
   scale_x_log10() +
   labs(title = "User Rating Habit",
@@ -516,7 +516,7 @@ edx %>%
   mutate(title_length = nchar(title)) %>%
   group_by(title_length) %>%
   summarize(avg_rating = mean(rating), n = n()) %>%
-  filter(n >= 50) %>% # On ignore les longueurs trop rares
+  filter(n >= 50) %>% # We ignore lengths that are too short
   ggplot(aes(title_length, avg_rating)) +
   geom_point(alpha = 0.5) +
   geom_smooth(method = "gam", color = "darkblue") +
@@ -568,7 +568,7 @@ ggplot(drama_fans, aes(drama_ratio, avg_user_rating)) +
   geom_point(alpha = 0.02, color = "gray") + 
   # On garde la ligne noire bien visible
   geom_smooth(method = "gam", color = "black", size = 1.2) +
-  # C'EST ICI QUE TOUT SE JOUE : On zoome pour voir les variations
+  # THIS IS WHERE IT ALL HAPPENS: Let’s zoom in to see the differences
   coord_cartesian(ylim = c(3.5, 3.7)) + 
   labs(title = "Focus: Drama Specialization vs Average Rating",
        subtitle = "Zoomed Y-axis to highlight the non-linear trend",
@@ -596,12 +596,12 @@ check_genre_loyalty <- function(genre_name) {
     mutate(genre = genre_name)
 }
 
-# Application de la fonction sur les genres sélectionnés
+# Applying the function to the selected genres
 loyalty_data <- map_df(genres_to_test, check_genre_loyalty)
 
-# Visualisation corrigée
-ggplot(loyalty_data, aes(x = ratio, y = avg_rating)) + # Utilisation de avg_rating
-  # On utilise geom_bin2d ou alpha très bas pour ne pas saturer la RAM à l'affichage
+v
+ggplot(loyalty_data, aes(x = ratio, y = avg_rating)) + # Using avg_rating
+  # We use geom_bin2d or a very low alpha value to avoid overloading the RAM when displaying the image
   geom_smooth(method = "gam", color = "darkblue", size = 1) +
   facet_wrap(~genre, scales = "free") +
   coord_cartesian(ylim = c(3.2, 4.0)) + # Zoom pour bien voir les pentes
