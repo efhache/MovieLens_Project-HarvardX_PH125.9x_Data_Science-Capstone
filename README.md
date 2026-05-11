@@ -45,9 +45,9 @@ The model was built incrementally to measure the impact of each variable on the 
 
 | Model Evolution | RMSE |
 | :--- | :--- |
-| **Baseline (Mean only)** | 1.06120 |
-| + Movie Effect | 0.94391 |
-| + User Effect | 0.86535 |
+| **Baseline (Mean only)** | 1.05990 |
+| + Movie Effect | 0.94374 |
+| + User Effect | 0.86593 |
 | **Final Model (Regularized + Time/Genre)** | **0.86332** |
 
 ## Repository Structure
